@@ -6,9 +6,11 @@ the same volume (data container) can be accessed by multiple clients including r
 and be viewed or modified in the iguazio UI (browse container view) 
 
 the driver need to be placed in the Kubelet volume-plugin directory, in default its:
+
   /usr/libexec/kubernetes/kubelet-plugins/volume/exec/igz~v3io/
   
 Need to verify it has execution permissions, and Kubelet is started/restarted after placing the driver 
+
 Requierments:  
  - install jq utility 
  - install v3io-fuse 
