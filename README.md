@@ -16,7 +16,8 @@ Requierments:
 ##Example POD YAML using the driver:
 (note the Authentication feature is still not enabled and should be ignored) 
 
-```apiVersion: v1
+```yaml
+apiVersion: v1
 kind: Pod
 metadata:
   name: ngvol
@@ -45,5 +46,6 @@ metadata:
   name: mysecret
 data:
   username: YWRtaW4=
-  password: MWYyZDFlMmU2N2Rm```
+  password: MWYyZDFlMmU2N2Rm
+```
 
