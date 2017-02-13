@@ -6,6 +6,7 @@ from subprocess import Popen, PIPE
 jj = '{"container":"vol1","kubernetes.io/fsType":"","kubernetes.io/readwrite":"rw","kubernetes.io/secret/password":"MWYyZDFlMmU2N2Rm","kubernetes.io/secret/username":"YWRtaW4=","url":"tcp://192.168.1.1"}'
 V3IO_ROOT_PATH = '/tmp/v3io'
 V3IO_FUSE_PATH = '/home/iguazio/igz/clients/fuse/bin/v3io_adapters_fuse'
+#V3IO_FUSE_PATH = '/home/iguazio/fu'
 V3IO_URL = 'tcp://192.168.154.57:1234'
 V3IO_SERVICE_URL = 'http://192.168.154.57:4001'
 
@@ -15,14 +16,13 @@ def err(msg):
     sys.exit(txt)
 
 def docmd(txt):
-    # p = Popen(txt.split(),stdout=PIPE)
-    # sout, serr = p.communicate()
-    # return p.returncode, sout, serr
-
     cmd = '/bin/bash -c "{0}"'.format(txt)
-    # print "exec: ", cmd
-    r = envoy.run(cmd)
 
+    #p = Popen(txt.split(),stdout=PIPE)
+    #sout, serr = p.communicate()
+    #return p.returncode, sout, serr
+
+    r = envoy.run(cmd)
     return r.status_code, r.std_out, r.std_err
 
 def ismounted(mnt):
@@ -43,7 +43,7 @@ def list_containers():
 def create_container(name):
     payload = {'data': {'type': 'container', 'attributes': {'name': name}}}
     r = requests.post(V3IO_SERVICE_URL + '/api/containers', json=payload)
-    if r.status_code != r.codes.created:
+    if r.status_code != requests.codes.created:
         return r.status_code,'failed creating container name:%s, reason:%s %s' % (name, r.status_code, r.content)
     return 0, eval(r.content)
 
@@ -59,11 +59,11 @@ def usage():
 
 
 def mount(args):
-    if len(args) < 3 :
+    if len(args) < 4 :
         err('Failed to mount device , only %d parameters, usage mount <mntpath> <json-params>' % len(args))
     mntpath = args[1]
     try :
-        js = json.loads(args[2])
+        js = json.loads(args[3])
     except :
             err('Failed to mount device %s , bad json %s' % (mntpath,args[2]))
     cnt = js.get('container','').strip()
@@ -91,11 +91,11 @@ def mount(args):
     v3mpath = '/'.join([V3IO_ROOT_PATH,cluster])
     if not ismounted(v3mpath):
         ecode, sout, serr = docmd('mkdir -p %s' % v3mpath)
-        os.system("%s -b 16 -c %s -m %s -u on &" % (V3IO_FUSE_PATH,V3IO_URL,v3mpath))
+        os.system("nohup %s -b 16 -c %s -m %s -u on > /dev/null 2>&1 &" % (V3IO_FUSE_PATH,V3IO_URL,v3mpath))
+#        os.system("%s %s -m %s -u on > /dev/null 2>&1 " % (V3IO_FUSE_PATH,V3IO_URL,v3mpath))  # tcp://192.168.154.57:1234 -m "${MNTPATH}" -u on -a "${V3IO_CNT}"
         time.sleep(5)
-        ecode, sout, serr = docmd('findmnt -n %s' % v3mpath)
-        if ecode or sout.split()[0]<>v3mpath:
-            err('Failed to mount device %s , didnt manage to create fuse mount at %s, %s %s' % (mntpath,v3mpath,sout, serr))
+        if not ismounted(v3mpath):
+            err('Failed to mount device %s , didnt manage to create fuse mount at %s' % (mntpath,v3mpath))
 
     cpath = '/'.join([v3mpath,cnt])
 
@@ -113,8 +113,6 @@ def mount(args):
 
     # mount bind
     cmd = "/bin/mount --bind '%s' '%s'" % (cpath,mntpath)
-
-    print cmd
     ecode, sout, serr = docmd(cmd)
     if ecode :
         err('Failed to bind mount dir %s to %s, %s, %s' % (cpath,mntpath,sout,serr))
@@ -125,8 +123,10 @@ def unmount(args):
     if len(args) < 2 :
         err('Failed to unmount device , only %d parameters, usage unmount <mntpath> ' % len(args))
     mntpath = args[1]
+    if mntpath[-1:]=='/' : mntpath=mntpath[:-1]  # remove trailing /
+
     if not ismounted(mntpath):
-        print '{"status": "Success"xxx}'
+        print '{"status": "Success"}'
         sys.exit()
 
     ecode, sout, serr = docmd('umount "%s"' % mntpath)
