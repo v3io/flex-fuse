@@ -1,14 +1,16 @@
 #!/usr/bin/python
 
-import json, os, sys, time, requests, envoy
-from subprocess import Popen, PIPE
+import json, os, sys, time, requests, envoy, re
 
-jj = '{"container":"vol1","kubernetes.io/fsType":"","kubernetes.io/readwrite":"rw","kubernetes.io/secret/password":"MWYyZDFlMmU2N2Rm","kubernetes.io/secret/username":"YWRtaW4=","url":"tcp://192.168.1.1"}'
+#jj = '{"container":"vol1","kubernetes.io/fsType":"","kubernetes.io/readwrite":"rw","kubernetes.io/secret/password":"MWYyZDFlMmU2N2Rm","kubernetes.io/secret/username":"YWRtaW4=","url":"tcp://192.168.1.1"}'
+V3IO_CONF_PATH = '/etc/v3io/v3io.conf'
 V3IO_ROOT_PATH = '/tmp/v3io'
 V3IO_FUSE_PATH = '/home/iguazio/igz/clients/fuse/bin/v3io_adapters_fuse'
-#V3IO_FUSE_PATH = '/home/iguazio/fu'
-V3IO_URL = 'tcp://192.168.154.57:1234'
-V3IO_SERVICE_URL = 'http://192.168.154.57:4001'
+
+V3IO_IP = '192.168.154.57'
+V3IO_DATA_PORT = "1234"
+V3IO_API_PORT = "4001"
+
 
 def err(msg):
     txt = '{ "status": "Failure", "message": "%s"}' % msg
@@ -31,8 +33,8 @@ def ismounted(mnt):
         return False
     return True
 
-def list_containers():
-    r = requests.get(V3IO_SERVICE_URL + '/api/containers')
+def list_containers(url):
+    r = requests.get(url + '/api/containers')
     if r.status_code <> 200 :
         return 1,"Error %d reading containers %s" % (r.status_code,r.text)
     clist= []
@@ -40,9 +42,9 @@ def list_containers():
         clist += [c['attributes']['name']]
     return 0, clist
 
-def create_container(name):
+def create_container(url, name):
     payload = {'data': {'type': 'container', 'attributes': {'name': name}}}
-    r = requests.post(V3IO_SERVICE_URL + '/api/containers', json=payload)
+    r = requests.post(url + '/api/containers', json=payload)
     if r.status_code != requests.codes.created:
         return r.status_code,'failed creating container name:%s, reason:%s %s' % (name, r.status_code, r.content)
     return 0, eval(r.content)
@@ -57,16 +59,31 @@ def usage():
     print '  unmount <mount dir>'
     sys.exit(1)
 
+def osmount(dataurl,path,cnt=''):
+    if not ismounted(path):
+        ecode, sout, serr = docmd('mkdir -p %s' % path)
+        if cnt: cnt=" -a "+cnt
+        os.system("nohup %s -b 16 -c %s -m %s -u on%s > /dev/null 2>&1 &" % (V3IO_FUSE_PATH,dataurl,path,cnt))
+#        os.system("%s %s -m %s -u on > /dev/null 2>&1 " % (V3IO_FUSE_PATH,V3IO_URL,v3mpath))  # tcp://192.168.154.57:1234 -m "${MNTPATH}" -u on -a "${V3IO_CNT}"
+        for i in [1,2,4]:
+            time.sleep(i)
+            if ismounted(path): break
+            if i == 4:
+                err('Failed to mount device , didnt manage to create fuse mount at %s' % (path))
+
 
 def mount(args):
     if len(args) < 4 :
         err('Failed to mount device , only %d parameters, usage mount <mntpath> <json-params>' % len(args))
     mntpath = args[1]
+
     try :
         js = json.loads(args[3])
     except :
             err('Failed to mount device %s , bad json %s' % (mntpath,args[2]))
     cnt = js.get('container','').strip()
+    #V3IO_IP = js.get('clusterip',V3IO_IP).strip()
+
     if cnt == '' :
             err('Failed to mount device %s , missing container name in %s' % (mntpath,args[2]))
 
@@ -75,28 +92,40 @@ def mount(args):
     dedicate = js.get('dedicate','false').strip().lower()  # dedicated Fuse mount (vs shared)
     createnew = js.get('create','false').strip().lower()   # create container if doesnt exist
 
+    try:
+        f=open(V3IO_CONF_PATH,'r')
+        v3args = json.loads(f.read())
+        root_path = v3args['root_path']
+        fuse_path = v3args['api_path']
+        debug = v3args['debug']
+        cl = v3args['clusters'][0]
+        apiurl = cl.api_url
+        dataurl = cl.data_url
+
+    except Exception,err:
+        err('Failed to mount device %s , Failed to open v3io conf at %s' % (mntpath,V3IO_CONF_PATH))
+
     # check if countainer exist
-    e, lc = list_containers()
+
+    e, lc = list_containers(apiurl)
     if e : err(lc)
     if cnt not in lc :
         if createnew in ['true','yes','y'] :
-            e, data = create_container(cnt)
+            e, data = create_container(apiurl,cnt)
             if e : err('Failed to mount device %s , cant create Data Container %s (%s)' % (mntpath,cnt,data))
         else :
             err('Failed to mount device %s , Data Container %s doesnt exist' % (mntpath,cnt))
+
+    if dedicate :
+        osmount(dataurl,mntpath,cnt)
+        print '{"status": "Success"}'
+        sys.exit()
 
     #if not os.path.isdir(cpath) :
 
     # if fuse not up mount
     v3mpath = '/'.join([V3IO_ROOT_PATH,cluster])
-    if not ismounted(v3mpath):
-        ecode, sout, serr = docmd('mkdir -p %s' % v3mpath)
-        os.system("nohup %s -b 16 -c %s -m %s -u on > /dev/null 2>&1 &" % (V3IO_FUSE_PATH,V3IO_URL,v3mpath))
-#        os.system("%s %s -m %s -u on > /dev/null 2>&1 " % (V3IO_FUSE_PATH,V3IO_URL,v3mpath))  # tcp://192.168.154.57:1234 -m "${MNTPATH}" -u on -a "${V3IO_CNT}"
-        time.sleep(5)
-        if not ismounted(v3mpath):
-            err('Failed to mount device %s , didnt manage to create fuse mount at %s' % (mntpath,v3mpath))
-
+    osmount(dataurl,v3mpath)
     cpath = '/'.join([v3mpath,cnt])
 
     # create subpath
@@ -154,6 +183,15 @@ if __name__ == '__main__':
         print '{"status": "Success"}'
     elif cmd=='list':
         os.system('mount | grep v3io')
+    elif cmd=='clear':
+        ecode, sout, serr = docmd('mount')
+        lines = sout.splitlines()
+        for l in lines :
+            m = re.match( r'^v3io.*on (.*) type', l, re.M|re.I)
+            if m:
+                print m.group(1)
+                unmount(['',m.group(1)])
+        sys.exit()
     else :
         usage()
 
