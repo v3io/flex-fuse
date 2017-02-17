@@ -3,6 +3,7 @@
 import json, os, sys, time, requests, envoy, re
 
 V3IO_CONF_PATH = '/etc/v3io'
+debug = False
 
 base_config = """{
    "version": "1.0",
@@ -68,12 +69,11 @@ def usage():
     print ' Example: v3io mount /tmp/mymnt {"container":"datalake"}\n'
     sys.exit(1)
 
-def osmount(dataurl,path,cnt=''):
+def osmount(fuse_path,dataurl,path,cnt=''):
     if not ismounted(path):
         ecode, sout, serr = docmd('mkdir -p %s' % path)
         if cnt: cnt=" -a "+cnt
-        os.system("nohup %s -b 16 -c %s -m %s -u on%s > /dev/null 2>&1 &" % (V3IO_FUSE_PATH,dataurl,path,cnt))
-#        os.system("%s %s -m %s -u on > /dev/null 2>&1 " % (V3IO_FUSE_PATH,V3IO_URL,v3mpath))  # tcp://192.168.154.57:1234 -m "${MNTPATH}" -u on -a "${V3IO_CNT}"
+        os.system("nohup %s -b 16 -c %s -m %s -u on%s > /dev/null 2>&1 &" % (fuse_path,dataurl,path,cnt))
         for i in [1,2,4]:
             time.sleep(i)
             if ismounted(path): break
@@ -128,15 +128,15 @@ def mount(args):
 
     # if we want a dedicated v3io connection
     if dedicate :
-        osmount(dataurl,mntpath,cnt)
+        osmount(fuse_path,dataurl,mntpath,cnt)
         print '{"status": "Success"}'
         sys.exit()
 
     #if not os.path.isdir(cpath) :
 
     # if shared fuse mount is not up, mount it
-    v3mpath = '/'.join([V3IO_ROOT_PATH,cluster])
-    osmount(dataurl,v3mpath)
+    v3mpath = '/'.join([root_path,cluster])
+    osmount(fuse_path,dataurl,v3mpath)
     cpath = '/'.join([v3mpath,cnt])
 
     # create subpath
