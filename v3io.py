@@ -3,7 +3,7 @@
 import json, os, sys, time, requests, envoy, re
 
 #jj = '{"container":"vol1","kubernetes.io/fsType":"","kubernetes.io/readwrite":"rw","kubernetes.io/secret/password":"MWYyZDFlMmU2N2Rm","kubernetes.io/secret/username":"YWRtaW4=","url":"tcp://192.168.1.1"}'
-V3IO_CONF_PATH = '/etc/v3io/v3io.conf'
+V3IO_CONF_PATH = '/etc/v3io'
 V3IO_ROOT_PATH = '/tmp/v3io'
 V3IO_FUSE_PATH = '/home/iguazio/igz/clients/fuse/bin/v3io_adapters_fuse'
 
@@ -11,6 +11,20 @@ V3IO_IP = '192.168.154.57'
 V3IO_DATA_PORT = "1234"
 V3IO_API_PORT = "4001"
 
+
+base_config = """{
+   "version": "1.0",
+   "root_path": "/tmp/v3io",
+   "fuse_path": "/home/iguazio/igz/clients/fuse/bin/v3io_adapters_fuse",
+   "debug": false,
+   "clusters": [
+        {
+                "name": "default",
+                "data_url": "%s:1234",
+                "api_url": "%s:4001"
+        }
+    ]
+}"""
 
 def err(msg):
     txt = '{ "status": "Failure", "message": "%s"}' % msg
@@ -50,13 +64,16 @@ def create_container(url, name):
     return 0, eval(r.content)
 
 def usage():
-    print 'Failed to mount device , only %d parameters, usage:\n' % len(args)
+    print 'Failed to execute , usage:\n'
     print '  init'
     print '  list'
     print '  attach <json params>'
     print '  detach <mount device>'
-    print '  mount <mount dir> <mount device> <json params>'
+    print '  mount <mount dir> [<mount device>] <json params>'
     print '  unmount <mount dir>'
+    print '  config  <v3io IP address>'
+    print '  clear'
+    print
     sys.exit(1)
 
 def osmount(dataurl,path,cnt=''):
@@ -73,12 +90,15 @@ def osmount(dataurl,path,cnt=''):
 
 
 def mount(args):
-    if len(args) < 4 :
-        err('Failed to mount device , only %d parameters, usage mount <mntpath> <json-params>' % len(args))
     mntpath = args[1]
+    if len(args) == 4 :
+        conf = args[3]
+    else:
+        conf = args[2]
 
+    # load mount policy from json
     try :
-        js = json.loads(args[3])
+        js = json.loads(conf)
     except :
             err('Failed to mount device %s , bad json %s' % (mntpath,args[2]))
     cnt = js.get('container','').strip()
@@ -92,21 +112,20 @@ def mount(args):
     dedicate = js.get('dedicate','false').strip().lower()  # dedicated Fuse mount (vs shared)
     createnew = js.get('create','false').strip().lower()   # create container if doesnt exist
 
+    # Load v3io configuration
     try:
-        f=open(V3IO_CONF_PATH,'r')
+        f=open(V3IO_CONF_PATH+'/v3io.conf','r')
         v3args = json.loads(f.read())
         root_path = v3args['root_path']
         fuse_path = v3args['api_path']
         debug = v3args['debug']
-        cl = v3args['clusters'][0]
+        cl = v3args['clusters'][0]  #TBD support for multi-cluster
         apiurl = cl.api_url
         dataurl = cl.data_url
-
     except Exception,err:
-        err('Failed to mount device %s , Failed to open v3io conf at %s' % (mntpath,V3IO_CONF_PATH))
+        err('Failed to mount device %s , Failed to open/read v3io conf at %s' % (mntpath,V3IO_CONF_PATH))
 
-    # check if countainer exist
-
+    # check if data countainer exist
     e, lc = list_containers(apiurl)
     if e : err(lc)
     if cnt not in lc :
@@ -116,6 +135,7 @@ def mount(args):
         else :
             err('Failed to mount device %s , Data Container %s doesnt exist' % (mntpath,cnt))
 
+    # if we need a dedicated v3io connection
     if dedicate :
         osmount(dataurl,mntpath,cnt)
         print '{"status": "Success"}'
@@ -123,7 +143,7 @@ def mount(args):
 
     #if not os.path.isdir(cpath) :
 
-    # if fuse not up mount
+    # if shared fuse mount not up mount
     v3mpath = '/'.join([V3IO_ROOT_PATH,cluster])
     osmount(dataurl,v3mpath)
     cpath = '/'.join([v3mpath,cnt])
@@ -149,8 +169,6 @@ def mount(args):
     print '{"status": "Success"}'
 
 def unmount(args):
-    if len(args) < 2 :
-        err('Failed to unmount device , only %d parameters, usage unmount <mntpath> ' % len(args))
     mntpath = args[1]
     if mntpath[-1:]=='/' : mntpath=mntpath[:-1]  # remove trailing /
 
@@ -169,10 +187,10 @@ def unmount(args):
 
 if __name__ == '__main__':
     args = sys.argv
-    if len(args) < 2 :
-        usage()
-
+    if len(args) < 2 : usage()
     cmd = args[1].lower()
+    if cmd in ['mount','unmount','config'] and len(args) < 3 : usage()
+
     if   cmd=='mount' :
         mount(args[1:])
     elif cmd=='unmount'  :
@@ -183,6 +201,11 @@ if __name__ == '__main__':
         print '{"status": "Success"}'
     elif cmd=='list':
         os.system('mount | grep v3io')
+    elif cmd=='config':
+        ecode, sout, serr = docmd('mkdir -p %s' % V3IO_CONF_PATH)
+        f=open(V3IO_CONF_PATH+'/v3io.conf','w')
+        f.write(base_config % (args[2],args[2]))
+        f.close()
     elif cmd=='clear':
         ecode, sout, serr = docmd('mount')
         lines = sout.splitlines()
