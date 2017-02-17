@@ -2,15 +2,7 @@
 
 import json, os, sys, time, requests, envoy, re
 
-#jj = '{"container":"vol1","kubernetes.io/fsType":"","kubernetes.io/readwrite":"rw","kubernetes.io/secret/password":"MWYyZDFlMmU2N2Rm","kubernetes.io/secret/username":"YWRtaW4=","url":"tcp://192.168.1.1"}'
 V3IO_CONF_PATH = '/etc/v3io'
-V3IO_ROOT_PATH = '/tmp/v3io'
-V3IO_FUSE_PATH = '/home/iguazio/igz/clients/fuse/bin/v3io_adapters_fuse'
-
-V3IO_IP = '192.168.154.57'
-V3IO_DATA_PORT = "1234"
-V3IO_API_PORT = "4001"
-
 
 base_config = """{
    "version": "1.0",
@@ -72,8 +64,8 @@ def usage():
     print '  mount <mount dir> [<mount device>] <json params>'
     print '  unmount <mount dir>'
     print '  config  <v3io IP address>'
-    print '  clear'
-    print
+    print '  clear\n'
+    print ' Example: v3io mount /tmp/mymnt {"container":"datalake"}\n'
     sys.exit(1)
 
 def osmount(dataurl,path,cnt=''):
@@ -102,7 +94,6 @@ def mount(args):
     except :
             err('Failed to mount device %s , bad json %s' % (mntpath,args[2]))
     cnt = js.get('container','').strip()
-    #V3IO_IP = js.get('clusterip',V3IO_IP).strip()
 
     if cnt == '' :
             err('Failed to mount device %s , missing container name in %s' % (mntpath,args[2]))
@@ -135,7 +126,7 @@ def mount(args):
         else :
             err('Failed to mount device %s , Data Container %s doesnt exist' % (mntpath,cnt))
 
-    # if we need a dedicated v3io connection
+    # if we want a dedicated v3io connection
     if dedicate :
         osmount(dataurl,mntpath,cnt)
         print '{"status": "Success"}'
@@ -143,7 +134,7 @@ def mount(args):
 
     #if not os.path.isdir(cpath) :
 
-    # if shared fuse mount not up mount
+    # if shared fuse mount is not up, mount it
     v3mpath = '/'.join([V3IO_ROOT_PATH,cluster])
     osmount(dataurl,v3mpath)
     cpath = '/'.join([v3mpath,cnt])
