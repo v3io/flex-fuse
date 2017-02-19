@@ -13,8 +13,8 @@ base_config = """{
    "clusters": [
         {
                 "name": "default",
-                "data_url": "%s:1234",
-                "api_url": "%s:4001"
+                "data_url": "tcp://%s:1234",
+                "api_url": "http://%s:4001"
         }
     ]
 }"""
@@ -108,13 +108,13 @@ def mount(args):
         f=open(V3IO_CONF_PATH+'/v3io.conf','r')
         v3args = json.loads(f.read())
         root_path = v3args['root_path']
-        fuse_path = v3args['api_path']
+        fuse_path = v3args['fuse_path']
         debug = v3args['debug']
         cl = v3args['clusters'][0]  #TBD support for multi-cluster
-        apiurl = cl.api_url
-        dataurl = cl.data_url
+        apiurl = cl['api_url']
+        dataurl = cl['data_url']
     except Exception,err:
-        err('Failed to mount device %s , Failed to open/read v3io conf at %s' % (mntpath,V3IO_CONF_PATH))
+        err('Failed to mount device %s , Failed to open/read v3io conf at %s (%s)' % (mntpath,V3IO_CONF_PATH,err))
 
     # check if data countainer exist
     e, lc = list_containers(apiurl)
@@ -127,7 +127,7 @@ def mount(args):
             err('Failed to mount device %s , Data Container %s doesnt exist' % (mntpath,cnt))
 
     # if we want a dedicated v3io connection
-    if dedicate :
+    if dedicate in ['true','yes','y']:
         osmount(fuse_path,dataurl,mntpath,cnt)
         print '{"status": "Success"}'
         sys.exit()
@@ -173,7 +173,6 @@ def unmount(args):
 
     os.rmdir(mntpath)
     print '{"status": "Success"}'
-    sys.exit()
 
 
 if __name__ == '__main__':
@@ -186,6 +185,7 @@ if __name__ == '__main__':
         mount(args[1:])
     elif cmd=='unmount'  :
         unmount(args[1:])
+        sys.exit()
     elif cmd=='attach'  :
         print '{"status": "Success", "device": "/dev/null"}'
     elif cmd=='detach' or cmd=='init':
@@ -203,7 +203,7 @@ if __name__ == '__main__':
         for l in lines :
             m = re.match( r'^v3io.*on (.*) type', l, re.M|re.I)
             if m:
-                print m.group(1)
+                print "Unmount: ",m.group(1),
                 unmount(['',m.group(1)])
         sys.exit()
     else :
