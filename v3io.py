@@ -19,7 +19,7 @@ base_config = """{
     ]
 }"""
 
-def err(msg):
+def perr(msg):
     txt = '{ "status": "Failure", "message": "%s"}' % msg
     # print txt
     sys.exit(txt)
@@ -78,7 +78,7 @@ def osmount(fuse_path,dataurl,path,cnt=''):
             time.sleep(i)
             if ismounted(path): break
             if i == 4:
-                err('Failed to mount device , didnt manage to create fuse mount at %s' % (path))
+                perr('Failed to mount device , didnt manage to create fuse mount at %s' % (path))
 
 
 def mount(args):
@@ -92,11 +92,11 @@ def mount(args):
     try :
         js = json.loads(conf)
     except :
-            err('Failed to mount device %s , bad json %s' % (mntpath,args[2]))
+            perr('Failed to mount device %s , bad json %s' % (mntpath,args[2]))
     cnt = js.get('container','').strip()
 
     if cnt == '' :
-            err('Failed to mount device %s , missing container name in %s' % (mntpath,args[2]))
+            perr('Failed to mount device %s , missing container name in %s' % (mntpath,args[2]))
 
     cluster = js.get('cluster','default').strip()
     subpath = js.get('subpath','').strip()
@@ -114,17 +114,17 @@ def mount(args):
         apiurl = cl['api_url']
         dataurl = cl['data_url']
     except Exception,err:
-        err('Failed to mount device %s , Failed to open/read v3io conf at %s (%s)' % (mntpath,V3IO_CONF_PATH,err))
+        perr('Failed to mount device %s , Failed to open/read v3io conf at %s (%s)' % (mntpath,V3IO_CONF_PATH,err))
 
     # check if data countainer exist
     e, lc = list_containers(apiurl)
-    if e : err(lc)
+    if e : perr(lc)
     if cnt not in lc :
         if createnew in ['true','yes','y'] :
             e, data = create_container(apiurl,cnt)
-            if e : err('Failed to mount device %s , cant create Data Container %s (%s)' % (mntpath,cnt,data))
+            if e : perr('Failed to mount device %s , cant create Data Container %s (%s)' % (mntpath,cnt,data))
         else :
-            err('Failed to mount device %s , Data Container %s doesnt exist' % (mntpath,cnt))
+            perr('Failed to mount device %s , Data Container %s doesnt exist' % (mntpath,cnt))
 
     # if we want a dedicated v3io connection
     if dedicate in ['true','yes','y']:
@@ -144,18 +144,18 @@ def mount(args):
         cpath = '/'.join([cpath,subpath])
         ecode, sout, serr = docmd('mkdir -p %s' % cpath)
         if ecode :
-            err('Failed to create subpath %s under container %s, %s, %s' % (subpath,cnt,sout,serr))
+            perr('Failed to create subpath %s under container %s, %s, %s' % (subpath,cnt,sout,serr))
 
     # mkdir
     ecode, sout, serr = docmd('mkdir -p %s' % mntpath)
     if ecode :
-        err('Failed to create mount dir %s %s %s' % (mntpath,sout,serr))
+        perr('Failed to create mount dir %s %s %s' % (mntpath,sout,serr))
 
     # mount bind
     cmd = "/bin/mount --bind '%s' '%s'" % (cpath,mntpath)
     ecode, sout, serr = docmd(cmd)
     if ecode :
-        err('Failed to bind mount dir %s to %s, %s, %s' % (cpath,mntpath,sout,serr))
+        perr('Failed to bind mount dir %s to %s, %s, %s' % (cpath,mntpath,sout,serr))
 
     print '{"status": "Success"}'
 
@@ -169,7 +169,7 @@ def unmount(args):
 
     ecode, sout, serr = docmd('umount "%s"' % mntpath)
     if ecode :
-        err('Failed to unmount %s , %s, %s' % [mntpath,sout,serr])
+        perr('Failed to unmount %s , %s, %s' % [mntpath,sout,serr])
 
     os.rmdir(mntpath)
     print '{"status": "Success"}'
