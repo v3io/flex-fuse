@@ -73,7 +73,7 @@ def osmount(fuse_path,dataurl,path,cnt=''):
     if not ismounted(path):
         ecode, sout, serr = docmd('mkdir -p %s' % path)
         if cnt: cnt=" -a "+cnt
-        os.system("nohup %s -b 16 -c %s -m %s -u on%s > /dev/null 2>&1 &" % (fuse_path,dataurl,path,cnt))
+        os.system("nohup %s -c %s -m %s -u on%s > /dev/null 2>&1 &" % (fuse_path,dataurl,path,cnt))
         for i in [1,2,4]:
             time.sleep(i)
             if ismounted(path): break
