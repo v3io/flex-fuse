@@ -12,7 +12,6 @@ the driver need to be placed in the Kubelet volume-plugin directory, in default 
 Need to verify it has execution permissions, and Kubelet is started/restarted after placing the driver 
 
 Requierments:  
- - install jq utility 
  - install v3io-fuse 
 
 ##Example POD YAML using the driver:
@@ -36,11 +35,14 @@ spec:
   - name: test
     flexVolume:
       driver: "igz/v3io"
-      secretRef: # for future use, not supported yet 
+      secretRef: # not supported in this driver, will be added soon  
         name: mysecret
       options:
-        url: "tcp://192.168.1.1"
-        container: vol1
+        container: mydata      # data container name
+        cluster: default       # optional, the name of the data cluster in case we use multiple 
+        subpath: subdir        # optional, sub directory in the data container
+        dedicate: true         # optional, shared fuse mount vs dedicated mount per container
+        createnew: false       # optional, if the data container is not found it will create it 
 
 apiVersion: v1
 kind: Secret
