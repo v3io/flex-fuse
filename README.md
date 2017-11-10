@@ -1,11 +1,11 @@
 # k8vol
 Kubernetes Volume Driver for iguazio Data Containers (v3io fuse) 
 
-this driver allow accessing iguazio data containers as a shared volume storage for Kubernetes 
-the same volume (data container) can be accessed by multiple clients including remote S3 users
-and be viewed or modified in the iguazio UI (browse container view) 
+This driver allow accessing iguazio data containers as a shared volume storage for Kubernetes.
 
-the driver need to be placed in the Kubelet volume-plugin directory, in default its:
+the same volume (data container) can be accessed by multiple remote clients (using S3 Object API), application containers or (nuclio) serverless, and be viewed or modified in the iguazio UI (browse container view) 
+
+the driver (v3vol.py) need to be placed in the Kubelet volume-plugin directory, in default its:
 
   /usr/libexec/kubernetes/kubelet-plugins/volume/exec/igz~v3io/
   
