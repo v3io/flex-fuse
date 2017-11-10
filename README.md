@@ -1,4 +1,4 @@
-# k8s-v3io
+# k8vol
 Kubernetes Volume Driver for iguazio Data Containers (v3io fuse) 
 
 this driver allow accessing iguazio data containers as a shared volume storage for Kubernetes 
