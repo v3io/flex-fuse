@@ -103,11 +103,14 @@ def usage():
     print ' Example: v3io mount /tmp/mymnt {"container":"datalake"}\n'
     sys.exit(1)
 
-def osmount(fuse_path,dataurl,path,cnt=''):
+def osmount(fuse_path,dataurl,path,cnt='', data_sid=None):
     if not ismounted(path):
         ecode, sout, serr = docmd('mkdir -p %s' % path)
-        if cnt: cnt=" -a "+cnt
-        os.system("nohup %s -c %s -m %s -u on%s > /dev/null 2>&1 &" % (fuse_path,dataurl,path,cnt))
+
+        session_arg = '-s %s' % (data_sid) if data_sid is not None else ''
+        if cnt: cnt = "-a " + cnt
+        os.system("nohup %s -c %s -m %s -u on %s %s > /dev/null 2>&1 &"
+                  % (fuse_path, dataurl, path, cnt, session_arg))
         for i in [1,2,4]:
             time.sleep(i)
             if ismounted(path): break
@@ -177,7 +180,7 @@ def mount(args):
 
     # if we want a dedicated v3io connection
     if dedicate in ['true','yes','y']:
-        osmount(fuse_path, dataurl, mntpath, cnt)
+        osmount(fuse_path, dataurl, mntpath, cnt, data_sid=data_sid)
         print '{"status": "Success"}'
         sys.exit()
 
@@ -185,7 +188,7 @@ def mount(args):
 
     # if shared fuse mount is not up, mount it
     v3mpath = '/'.join([root_path,cluster])
-    osmount(fuse_path,dataurl,v3mpath)
+    osmount(fuse_path,dataurl,v3mpath, data_sid=data_sid)
     cpath = '/'.join([v3mpath,cnt])
 
     # create subpath
