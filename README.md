@@ -3,9 +3,11 @@ Kubernetes FlexVolume Driver for iguazio Data Platform (v3io fuse)
 
 This driver allow accessing iguazio data containers (or a sub-path) as a shared volume storage for Kubernetes.
 
-the same volume (data container) can be accessed **simultaneously** by multiple application containers or ([nuclio](https://github.com/nuclio/nuclio)) serverless functions, by multiple remote clients (via S3 Object API), and can be viewed or modified in the iguazio UI (browse container view). 
+the same volume (data container) can be accessed **simultaneously** by multiple application containers or ([nuclio](https://github.com/nuclio/nuclio)) serverless functions, by multiple remote clients (e.g. via S3 Object API or DynamoDB API), and can be viewed or modified in the iguazio UI (browse container view). 
+
 
 > Note: iguazio data platform provide unique multi-model capabilities, files and objects can also be viewed as database, document or stream records when using appropriate data APIs. Updates to data are immediately committed ensuring full consistency regardless of the API semantics.   
+
 
 ## Installation
 
@@ -13,7 +15,9 @@ The driver (v3vol.py) need to be placed in the Kubelet volume-plugin directory, 
 
   `/usr/libexec/kubernetes/kubelet-plugins/volume/exec/igz~v3io/`
   
-Need to verify it has execution permissions, and Kubelet is started/restarted after placing the driver 
+Need to verify it has execution permissions, and Kubelet is started/restarted after placing the driver.
+
+The address to the iguazio data platform(s) should be set in the `/etc/v3io/v3io.conf` file or using `./v3vol.py config  <v3io IP address>`
 
 Requierments:  
  - install v3io-fuse 
@@ -24,7 +28,6 @@ Access to iguazio data platform must be authenticated, each identity may have di
 The username and password strings are used to form a unique user session per application container.
 
 ## Example POD YAML using the driver:
-(note the Authentication feature is still not enabled and should be ignored) 
 
 ```yaml
 apiVersion: v1
