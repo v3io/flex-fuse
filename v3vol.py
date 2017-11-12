@@ -136,10 +136,12 @@ def mount(args):
 
     cluster = js.get('cluster','default').strip()
     subpath = js.get('subpath','').strip()
-    dedicate = js.get('dedicate','false').strip().lower()  # dedicated Fuse mount (vs shared)
+    dedicate = js.get('dedicate','true').strip().lower()   # dedicated Fuse mount (vs shared)
     createnew = js.get('create','false').strip().lower()   # create container if doesnt exist
-    username = js.get('username', '').strip()            # username for authentication
-    password = js.get('password', '').strip()            # pw for authentication
+    username = js.get('username', '').strip()              # username for authentication
+    username = js.get('kubernetes.io/secret/username', username).strip()    # username from secret
+    password = js.get('password', '').strip()              # pw for authentication
+    password = js.get('kubernetes.io/secret/password', password).strip()    # pw from secret
 
     if not len(username):
         perr('Authentication details missing. Please provide username')
@@ -220,7 +222,7 @@ def unmount(args):
 
     ecode, sout, serr = docmd('umount "%s"' % mntpath)
     if ecode :
-        perr('Failed to unmount %s , %s, %s' % [mntpath,sout,serr])
+        perr('Failed to unmount %s , %s, %s' % (mntpath,sout,serr))
 
     os.rmdir(mntpath)
     print '{"status": "Success"}'
