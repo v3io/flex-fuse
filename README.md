@@ -1,11 +1,15 @@
 # k8vol
-Kubernetes Volume Driver for iguazio Data Containers (v3io fuse) 
+Kubernetes FlexVolume Driver for iguazio Data Platform (v3io fuse) 
 
-This driver allow accessing iguazio data containers as a shared volume storage for Kubernetes.
+This driver allow accessing iguazio data containers (or a sub-path) as a shared volume storage for Kubernetes.
 
-the same volume (data container) can be accessed by multiple remote clients (using S3 Object API), application containers or (nuclio) serverless functions, and be viewed or modified in the iguazio UI (browse container view) 
+the same volume (data container) can be accessed **simultaneously** by multiple application containers or ([nuclio](https://github.com/nuclio/nuclio)) serverless functions, by multiple remote clients (via S3 Object API), and can be viewed or modified in the iguazio UI (browse container view). 
 
-the driver (v3vol.py) need to be placed in the Kubelet volume-plugin directory, in default its:
+> Note: iguazio data platform provide unique multi-model capabilities, files and objects can also be viewed as database, document or stream records when using appropriate data APIs. Updates to data are immediately committed ensuring full consistency regardless of the API semantics.   
+
+## Installation
+
+The driver (v3vol.py) need to be placed in the Kubelet volume-plugin directory, by default its:
 
   `/usr/libexec/kubernetes/kubelet-plugins/volume/exec/igz~v3io/`
   
@@ -13,6 +17,11 @@ Need to verify it has execution permissions, and Kubelet is started/restarted af
 
 Requierments:  
  - install v3io-fuse 
+
+## Security and Session Authentication 
+Access to iguazio data platform must be authenticated, each identity may have different read or write permissions to individual files and directories. The username and password are provided through Kubernetes secrets (see example below), or by using `username` and `password`  options.
+
+The username and password strings are used to form a unique user session per application container.
 
 ## Example POD YAML using the driver:
 (note the Authentication feature is still not enabled and should be ignored) 
@@ -35,13 +44,12 @@ spec:
   - name: test
     flexVolume:
       driver: "igz/v3io"
-      secretRef: # not supported in this driver, will be added soon  
+      secretRef:   
         name: mysecret
       options:
         container: mydata      # data container name
         cluster: default       # optional, the name of the data cluster in case we use multiple 
         subpath: subdir        # optional, sub directory in the data container
-        dedicate: true         # optional, shared fuse mount vs dedicated mount per container
         createnew: false       # optional, if the data container is not found it will create it 
 
 apiVersion: v1
