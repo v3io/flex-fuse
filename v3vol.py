@@ -133,12 +133,12 @@ def mount(args):
     subpath = js.get('subpath','').strip()
     dedicate = js.get('dedicate','false').strip().lower()  # dedicated Fuse mount (vs shared)
     createnew = js.get('create','false').strip().lower()   # create container if doesnt exist
-    username = js.get('username', None).strip()            # username for authentication
-    password = js.get('passwrod', None).strip()            # pw for authentication
+    username = js.get('username', '').strip()            # username for authentication
+    password = js.get('password', '').strip()            # pw for authentication
 
-    if username is None:
+    if not len(username):
         perr('Authentication details missing. Please provide username')
-    if password is None:
+    if not len(password):
         perr('Authentication details missing. Please provide password')
 
     # Load v3io configuration
