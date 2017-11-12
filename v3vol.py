@@ -117,7 +117,6 @@ def osmount(fuse_path,dataurl,path,cnt='', data_sid=None):
             if i == 4:
                 perr('Failed to mount device , didnt manage to create fuse mount at %s' % (path))
 
-
 def mount(args):
     mntpath = args[1]
     if len(args) == 4 :
