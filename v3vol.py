@@ -52,6 +52,7 @@ def create_session(url, username, password, session_type='control'):
             'type': 'session',
             'attributes': {
                 'plane': session_type,
+                'interface_kind': 'fuse',
                 'username': username,
                 'password': password,
             }
@@ -64,7 +65,7 @@ def create_session(url, username, password, session_type='control'):
         return 1, "Error %d creating session %s" % (r.status_code, r.text)
 
     # Get cookie
-    session_id = r['data']['id']
+    session_id = r.json()['data']['id']
     cookie = {'sid': session_id}
     return 0, cookie
 
