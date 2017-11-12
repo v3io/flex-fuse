@@ -40,8 +40,39 @@ def ismounted(mnt):
         return False
     return True
 
-def list_containers(url):
-    r = requests.get(url + '/api/containers')
+def create_control_session(url, username, password):
+    return create_session(url, username, password, 'control')
+
+def create_data_session(url, username, password):
+    return create_session(url, username, password, 'data')
+
+def create_session(url, username, password, session_type='control'):
+    payload = {
+        'type': 'session',
+        'attributes': {
+            'plane': session_type,
+            'username': username,
+            'password': password,
+        }
+    }
+
+    r = requests.post(url + '/api/sessions', json=payload)
+
+    if r.status_code <> 201:
+        return 1, "Error %d creating session %s" % (r.status_code, r.text)
+
+    # Get cookie
+    session_id = r['data']['id']
+    cookie = {'sid': session_id}
+    return 0, cookie
+
+def cookie_to_headers(cookie):
+    return {
+        'Cookie': 'session=j:' + json.dumps(cookie)
+    } if cookie is not None else None
+
+def list_containers(url, session_cookie):
+    r = requests.get(url + '/api/containers', headers=cookie_to_headers(session_cookie))
     if r.status_code <> 200 :
         return 1,"Error %d reading containers %s" % (r.status_code,r.text)
     clist= []
@@ -49,9 +80,9 @@ def list_containers(url):
         clist += [c['attributes']['name']]
     return 0, clist
 
-def create_container(url, name):
+def create_container(url, name, session_cookie):
     payload = {'data': {'type': 'container', 'attributes': {'name': name}}}
-    r = requests.post(url + '/api/containers', json=payload)
+    r = requests.post(url + '/api/containers', json=payload, headers=cookie_to_headers(session_cookie))
     if r.status_code != requests.codes.created:
         return r.status_code,'failed creating container name:%s, reason:%s %s' % (name, r.status_code, r.content)
     return 0, eval(r.content)
@@ -102,6 +133,13 @@ def mount(args):
     subpath = js.get('subpath','').strip()
     dedicate = js.get('dedicate','false').strip().lower()  # dedicated Fuse mount (vs shared)
     createnew = js.get('create','false').strip().lower()   # create container if doesnt exist
+    username = js.get('username', None).strip()            # username for authentication
+    password = js.get('passwrod', None).strip()            # pw for authentication
+
+    if username is None:
+        perr('Authentication details missing. Please provide username')
+    if password is None:
+        perr('Authentication details missing. Please provide password')
 
     # Load v3io configuration
     try:
@@ -116,19 +154,25 @@ def mount(args):
     except Exception,err:
         perr('Failed to mount device %s , Failed to open/read v3io conf at %s (%s)' % (mntpath,V3IO_CONF_PATH,err))
 
-    # check if data countainer exist
-    e, lc = list_containers(apiurl)
+    # create control and data sessions
+    e, ctrl_cookie = create_control_session(apiurl, username, password)
+    if e: perr('Failed to create control session %s' % (ctrl_cookie))
+    e, data_cookie = create_data_session(apiurl, username, password)
+    if e: perr('Failed to create data session %s' % (data_cookie))
+
+    # check if data container exist
+    e, lc = list_containers(apiurl, ctrl_cookie)
     if e : perr(lc)
     if cnt not in lc :
         if createnew in ['true','yes','y'] :
-            e, data = create_container(apiurl,cnt)
+            e, data = create_container(apiurl, cnt, ctrl_cookie)
             if e : perr('Failed to mount device %s , cant create Data Container %s (%s)' % (mntpath,cnt,data))
         else :
             perr('Failed to mount device %s , Data Container %s doesnt exist' % (mntpath,cnt))
 
     # if we want a dedicated v3io connection
     if dedicate in ['true','yes','y']:
-        osmount(fuse_path,dataurl,mntpath,cnt)
+        osmount(fuse_path, dataurl, mntpath, cnt)
         print '{"status": "Success"}'
         sys.exit()
 
