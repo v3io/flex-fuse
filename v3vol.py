@@ -48,11 +48,13 @@ def create_data_session(url, username, password):
 
 def create_session(url, username, password, session_type='control'):
     payload = {
-        'type': 'session',
-        'attributes': {
-            'plane': session_type,
-            'username': username,
-            'password': password,
+        'data': {
+            'type': 'session',
+            'attributes': {
+                'plane': session_type,
+                'username': username,
+                'password': password,
+            }
         }
     }
 
