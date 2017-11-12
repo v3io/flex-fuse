@@ -108,7 +108,7 @@ def osmount(fuse_path,dataurl,path,cnt='', data_sid=None):
         ecode, sout, serr = docmd('mkdir -p %s' % path)
 
         session_arg = '-s %s' % (data_sid) if data_sid is not None else ''
-        if cnt: cnt = "-a " + cnt
+        if cnt: cnt = '-a ' + cnt
         os.system("nohup %s -c %s -m %s -u on %s %s > /dev/null 2>&1 &"
                   % (fuse_path, dataurl, path, cnt, session_arg))
         for i in [1,2,4]:
