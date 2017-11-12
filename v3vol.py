@@ -163,6 +163,8 @@ def mount(args):
     e, data_cookie = create_data_session(apiurl, username, password)
     if e: perr('Failed to create data session %s' % (data_cookie))
 
+    data_sid = data_cookie['sid']
+
     # check if data container exist
     e, lc = list_containers(apiurl, ctrl_cookie)
     if e : perr(lc)
