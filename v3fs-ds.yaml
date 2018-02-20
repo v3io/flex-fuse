@@ -1,0 +1,80 @@
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: v3fs-set
+spec:
+  template:
+    metadata:
+      name: v3fs-deploy
+      labels:
+        app: v3fs-deploy
+    spec:
+      containers:
+        - image: v3fs-test:latest
+          imagePullPolicy: Never
+          name: flex-deploy
+          securityContext:
+              privileged: true
+          volumeMounts:
+            - mountPath: /flexmnt
+              name: flexvolume-mount
+            - mountPath: /etc/v3io
+              name: etc
+            - mountPath: /opt/iguazio
+              name: optigz            
+            - mountPath: /cfg        
+              name: cfg   
+
+      volumes:
+        - name: flexvolume-mount
+          hostPath:
+            path: /usr/libexec/kubernetes/kubelet-plugins/volume/exec
+            #type: DirectoryOrCreate
+        - name: etc
+          hostPath:
+            path: /etc/v3io
+            #type: DirectoryOrCreate
+        - name: optigz
+          hostPath:
+            path: /opt/iguazio
+            #type: DirectoryOrCreate
+        - name: cfg
+          configMap:
+            name: v3fs-config
+            items:
+            - key: v3io                   
+              path: v3io.conf
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: v3fs-config
+  namespace: default
+data:
+  v3io: |
+    {
+      "version": "1.0",
+      "root_path": "/tmp/v3io",
+      "fuse_path": "/home/iguazio/igz/clients/fuse/bin/v3io_adapters_fuse",
+      "debug": true,
+      "clusters": [
+          {
+                "name": "default",
+                "data_url": "tcp://10.10.3.11:1234",
+                "api_url": "http://10.90.0.11:4001"
+          }
+      ]
+    }
+
+---
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: v3io
+type: Opaque
+data:
+  username: <TBD>
+  password: <TBD>

@@ -5,19 +5,6 @@ import json, os, sys, time, requests, envoy, re
 V3IO_CONF_PATH = '/etc/v3io'
 debug = False
 
-base_config = """{
-   "version": "1.0",
-   "root_path": "/tmp/v3io",
-   "fuse_path": "/home/iguazio/igz/clients/fuse/bin/v3io_adapters_fuse",
-   "debug": false,
-   "clusters": [
-        {
-                "name": "default",
-                "data_url": "tcp://%s:1234",
-                "api_url": "http://%s:4001"
-        }
-    ]
-}"""
 
 def perr(msg):
     txt = '{ "status": "Failure", "message": "%s"}' % msg
@@ -98,7 +85,6 @@ def usage():
     print '  detach <mount device>'
     print '  mount <mount dir> [<mount device>] <json params>'
     print '  unmount <mount dir>'
-    print '  config  <v3io IP address>'
     print '  clear\n'
     print ' Example: v3io mount /tmp/mymnt {"container":"datalake"}\n'
     sys.exit(1)
@@ -108,16 +94,28 @@ def osmount(fuse_path,dataurl,path,cnt='', data_sid=None):
         ecode, sout, serr = docmd('mkdir -p %s' % path)
 
         session_arg = '-s %s' % (data_sid) if data_sid is not None else ''
+        print "session:", session_arg
         if cnt: cnt = '-a ' + cnt
-        os.system("nohup %s -c %s -m %s -u on %s %s > /dev/null 2>&1 &"
-                  % (fuse_path, dataurl, path, cnt, session_arg))
+
+        cmdstr = "nohup %s -c %s -m %s -u on %s %s > /dev/null 2>&1 &" % (fuse_path, dataurl, path, cnt, session_arg)
+        debug_print(debug, cmdstr)
+        os.system(cmdstr)
         for i in [1,2,4]:
             time.sleep(i)
             if ismounted(path): break
             if i == 4:
                 perr('Failed to mount device , didnt manage to create fuse mount at %s' % (path))
 
-def mount(args):
+def load_config():
+
+    try:
+        f=open(V3IO_CONF_PATH+'/v3io.conf','r')
+        return 0, json.loads(f.read())
+    except Exception,err:
+        return 1, 'Failed to mount device %s , Failed to open/read v3io conf at %s (%s)' % (mntpath,V3IO_CONF_PATH,err)
+
+
+def mount(args, v3args):
     mntpath = args[1]
     if len(args) == 4 :
         conf = args[3]
@@ -148,18 +146,12 @@ def mount(args):
     if not len(password):
         perr('Authentication details missing. Please provide password')
 
-    # Load v3io configuration
-    try:
-        f=open(V3IO_CONF_PATH+'/v3io.conf','r')
-        v3args = json.loads(f.read())
-        root_path = v3args['root_path']
-        fuse_path = v3args['fuse_path']
-        debug = v3args['debug']
-        cl = v3args['clusters'][0]  #TBD support for multi-cluster
-        apiurl = cl['api_url']
-        dataurl = cl['data_url']
-    except Exception,err:
-        perr('Failed to mount device %s , Failed to open/read v3io conf at %s (%s)' % (mntpath,V3IO_CONF_PATH,err))
+    # Get v3io configuration
+    root_path = v3args['root_path']
+    fuse_path = v3args['fuse_path']
+    cl = v3args['clusters'][0]  #TBD support for multi-cluster
+    apiurl = cl['api_url']
+    dataurl = cl['data_url']
 
     # create control and data sessions
     e, ctrl_cookie = create_control_session(apiurl, username, password)
@@ -227,6 +219,11 @@ def unmount(args):
     os.rmdir(mntpath)
     print '{"status": "Success"}'
 
+def debug_print(debug, txt):
+    if debug :
+        hs = open("/tmp/v3vol.log", "a")
+        hs.write(str(txt) + "\n")
+        hs.close()
 
 if __name__ == '__main__':
     args = sys.argv
@@ -234,8 +231,13 @@ if __name__ == '__main__':
     cmd = args[1].lower()
     if cmd in ['mount','unmount','config'] and len(args) < 3 : usage()
 
+    e, v3args = load_config()
+    if e: perr(v3args)
+    debug = v3args['debug']
+    debug_print(debug, args)
+
     if   cmd=='mount' :
-        mount(args[1:])
+        mount(args[1:], v3args)
     elif cmd=='unmount'  :
         unmount(args[1:])
         sys.exit()
@@ -245,11 +247,6 @@ if __name__ == '__main__':
         print '{"status": "Success"}'
     elif cmd=='list':
         os.system('mount | grep v3io')
-    elif cmd=='config':
-        ecode, sout, serr = docmd('mkdir -p %s' % V3IO_CONF_PATH)
-        f=open(V3IO_CONF_PATH+'/v3io.conf','w')
-        f.write(base_config % (args[2],args[2]))
-        f.close()
     elif cmd=='clear':
         ecode, sout, serr = docmd('mount')
         lines = sout.splitlines()
