@@ -27,12 +27,12 @@ def fail_and_exit(msg, **kwargs):
     error_json = json.dumps(failure_object)
     sys.exit(error_json)
 
+
 def exit_successfully(**kwargs):
     success_object = {'status': 'Success'}
     success_object.update(**kwargs)
     print json.dumps(success_object)
     sys.exit()
-
 
 
 def run_command(command, cwd=None, quiet=False):
@@ -58,9 +58,9 @@ def run_command(command, cwd=None, quiet=False):
     return stdout, stderr, retcode
 
 
-def is_mounted(mount):
-    stdout, stderr, retcode = run_command('findmnt -n {0}'.format(mount), quiet=True)
-    if retcode or stdout.split()[0] != mount:
+def is_mounted(mount_path):
+    stdout, stderr, retcode = run_command('findmnt -n {0}'.format(mount_path), quiet=True)
+    if retcode or stdout.split()[0] != mount_path:
         return False
     return True
 
@@ -118,7 +118,10 @@ def create_container(url, name, session_cookie):
     payload = {'data': {'type': 'container', 'attributes': {'name': name}}}
     response = requests.post(url + '/api/containers', json=payload, headers=cookie_to_headers(session_cookie))
     if response.status_code != requests.codes.created:
-        fail_and_exit('Failed creating data container', container_name=name, status_code=response.status_code, response=response.text)
+        fail_and_exit('Failed creating data container',
+                      container_name=name,
+                      status_code=response.status_code,
+                      response=response.text)
     return response.json()
 
 
@@ -141,7 +144,7 @@ def osmount(fuse_path, dataurl, v3io_mount_path, container='', data_sid=None):
                 break
 
             if i == 4:
-                fail_and_exit('Failed to mount device. Failed to create fuse mount at {0}'.format(path))
+                fail_and_exit('Failed to mount device. Failed to create fuse mount at {0}'.format(v3io_mount_path))
 
             time.sleep(i)
 
@@ -260,20 +263,24 @@ def register_arguments():
     sub_parsers = _parser.add_subparsers(dest='action')
     sub_parsers.required = True
 
-    list_sub_parser = sub_parsers.add_parser('list', help='List local mounts')
-    clear_sub_parser = sub_parsers.add_parser('clear', help='Clear all mounts')
-    init_sub_parser = sub_parsers.add_parser('init', help='No op')
-    detach_sub_parser = sub_parsers.add_parser('detach', help='No op')
 
+    # No additional args needed for those actions
+    sub_parsers.add_parser('list', help='List local mounts')
+    sub_parsers.add_parser('clear', help='Clear all mounts')
+    sub_parsers.add_parser('init', help='No op')
+    sub_parsers.add_parser('detach', help='No op')
+
+    # mount
     mount_sub_parser = sub_parsers. \
         add_parser('mount',
-                   help='Example: sudo ./v3vol.py mount --mount=dir=/tmp/mymnt '
+                   help='Example: ./v3vol.py mount --mount=dir=/tmp/mymnt '
                         '--json-params=\'{"container":"datalake"}\'')
     mount_sub_parser.add_argument('-md', '--mount-dir', type=str, required=True)
     mount_sub_parser.add_argument('-jp', '--json-params', type=str)
 
+    # unmount
     unmount_sub_parser = sub_parsers. \
-        add_parser('unmount', help='Example: sudo ./v3vol.py unmount --mount=dir=/tmp/mymnt')
+        add_parser('unmount', help='Example: ./v3vol.py unmount --mount=dir=/tmp/mymnt')
     unmount_sub_parser.add_argument('-md', '--mount-dir', type=str, required=True)
 
     return _parser
@@ -286,7 +293,7 @@ if __name__ == '__main__':
     v3args = load_config()
     DEBUG = v3args['debug']
 
-    debug_print(args)
+    debug_print('v3vol arguments: {0}'.format(args))
 
     if args.action == 'mount':
         mount(args.mount_dir, args.json_params, v3args)
@@ -299,10 +306,10 @@ if __name__ == '__main__':
     elif args.action == 'list':
         os.system('mount | grep v3io')
     elif args.action == 'clear':
-        _, out, err = run_command('mount', quiet=False)
+        out, err, _ = run_command('mount', quiet=False)
 
         for l in out.splitlines():
             m = re.match(r'^v3io.*on (.*) type', l, re.M | re.I)
             if m:
-                unmount(m.group(1), '')
+                unmount(m.group(1))
 
