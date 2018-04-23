@@ -11,17 +11,24 @@ import re
 import argparse
 
 V3IO_CONF_PATH = '/etc/v3io'
-debug = False
+DEBUG = False
+
+
+
+def debug_print(txt):
+    if DEBUG:
+        with open('/tmp/v3vol.log', 'a') as hs:
+            hs.write(str(txt) + '\n')
 
 
 def fail_and_exit(msg, **kwargs):
-    failure_object = {'status': 'failure', 'message': msg}
+    failure_object = {'status': 'Failure', 'message': msg}
     failure_object.update(**kwargs)
     error_json = json.dumps(failure_object)
     sys.exit(error_json)
 
 def exit_successfully(**kwargs):
-    success_object = {'status': 'success'}
+    success_object = {'status': 'Success'}
     success_object.update(**kwargs)
     print json.dumps(success_object)
     sys.exit()
@@ -29,23 +36,25 @@ def exit_successfully(**kwargs):
 
 
 def run_command(command, cwd=None, quiet=False):
-    print 'Running cmd: {0}'.format(command)
+    debug_print('Running cmd: {0}'.format(command))
 
     pipes = subprocess.Popen(shlex.split(command),
                              cwd=cwd,
                              shell=False,
                              stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE,
-                             executable='/bin/bash')
+                             stderr=subprocess.PIPE)
     stdout, stderr = pipes.communicate()
     retcode = pipes.returncode
 
     if retcode:
         if quiet:
-            print 'cmd failed quietly with retcode: {0}'.format(retcode)
+            debug_print('Command failed quietly. stdout: {0}, stderr: {1}, retcode: {2}'.
+                        format(stdout, stderr, retcode))
         else:
             fail_and_exit('Command failed', command=command, stdout=stdout, stderr=stderr, retcode=retcode)
-
+    else:
+        debug_print('Command ran successfully. stdout: {0}, stderr: {1}, retcode: {2}'
+                    .format(stdout, stderr, retcode))
     return stdout, stderr, retcode
 
 
@@ -113,22 +122,22 @@ def create_container(url, name, session_cookie):
     return response.json()
 
 
-def osmount(fuse_path, dataurl, path, container='', data_sid=None):
-    if not is_mounted(path):
-        stdout, stderr, retcode = run_command('mkdir -p %s' % path)
+def osmount(fuse_path, dataurl, v3io_mount_path, container='', data_sid=None):
+    if not is_mounted(v3io_mount_path):
+        run_command('mkdir -p {0}'.format(v3io_mount_path))
 
         session_arg = '-s {0}'.format(data_sid if data_sid is not None else '')
-        print "session:", session_arg
+        print "session:{0}".format(session_arg)
         if container:
             container = '-a ' + container
 
-        cmdstr = "nohup {0} -c {1} -m {2} -u on {3} {4} > /dev/null 2>&1 &".\
-            format(fuse_path, dataurl, path, container, session_arg)
+        command = "nohup {0} -c {1} -m {2} -u on {3} {4} > /dev/null 2>&1 &".\
+            format(fuse_path, dataurl, v3io_mount_path, container, session_arg)
 
-        debug_print(debug, cmdstr)
-        os.system(cmdstr)
+        debug_print(command)
+        os.system(command)
         for i in [1, 2, 4]:
-            if is_mounted(path):
+            if is_mounted(v3io_mount_path):
                 break
 
             if i == 4:
@@ -137,15 +146,13 @@ def osmount(fuse_path, dataurl, path, container='', data_sid=None):
             time.sleep(i)
 
 
-def load_config(mount_dir):
+def load_config():
 
     try:
         with open(V3IO_CONF_PATH + '/v3io.conf', 'r') as f:
-            return None, json.loads(f.read())
+            return json.loads(f.read())
     except Exception as exc:
-        fail_and_exit('Failed to mount device {0} , Failed to open/read v3io conf at {1}'
-                      .format(mount_dir, V3IO_CONF_PATH),
-                      exc=str(exc))
+        fail_and_exit('Failed to open/read v3io conf at {0}'.format(V3IO_CONF_PATH), exc=str(exc))
 
 def mount(mount_path, json_params, v3args):
     mount_path = os.path.abspath(mount_path)
@@ -183,8 +190,8 @@ def mount(mount_path, json_params, v3args):
     # TBD support for multi-cluster
     clusters = v3args['clusters'][0]
 
-    api_url = cluster['api_url']
-    data_url = cluster['data_url']
+    api_url = clusters['api_url']
+    data_url = clusters['data_url']
 
     # create control and data sessions
     success, ctrl_cookie = create_control_session(api_url, username, password)
@@ -204,7 +211,7 @@ def mount(mount_path, json_params, v3args):
             _ = create_container(api_url, container_name, ctrl_cookie)
 
         else:
-            fail_and_exit('Failed to mount device {0} , Data Container {1} doesnt exist'
+            fail_and_exit('Failed to mount device {0} , Data Container {1} doesn\'t exist'
                           .format(mount_path, container_name))
 
     # if we want a dedicated v3io connection
@@ -231,9 +238,8 @@ def mount(mount_path, json_params, v3args):
     exit_successfully()
 
 
-def unmount(mount_path, json_params=''):
+def unmount(mount_path):
     mount_path = os.path.abspath(mount_path)
-    print "Unmounting: {0}".format(mount_path)
 
     if not is_mounted(mount_path):
         exit_successfully()
@@ -249,29 +255,28 @@ def unmount(mount_path, json_params=''):
     exit_successfully()
 
 
-def debug_print(debug, txt):
-    if debug:
-        with open('/tmp/v3vol.log', 'a') as hs:
-            hs.write(str(txt) + '\n')
-
 def register_arguments():
-    parser = argparse.ArgumentParser(prog='v3vol', add_help=True)
-    sub_parser = parser.add_subparsers(dest='action')
-    for command in ['init', 'list', 'config', 'attach', 'detach', 'mount', 'unmount', 'clear']:
-        command_sub_parser = sub_parser.add_parser(command)
-        if command == 'attach':
-            command_sub_parser.add_argument('-jp', '--json-params', type=str)
-        elif command == 'detach':
-            command_sub_parser.add_argument('-md', '--mount-device', type=str)
-        elif command == 'mount':
-            command_sub_parser.add_argument('-md', '--mount-dir', type=str, required=True)
-            command_sub_parser.add_argument('-jp', '--json-params', type=str)
-        elif command == 'unmount':
-            command_sub_parser.add_argument('-md', '--mount-dir', type=str, required=True)
-        elif command == 'config':
-            command_sub_parser.add_argument('-md', '--mount-dir', type=str, required=True)
+    _parser = argparse.ArgumentParser(prog='v3vol', add_help=True)
+    sub_parsers = _parser.add_subparsers(dest='action')
+    sub_parsers.required = True
 
-    return parser
+    list_sub_parser = sub_parsers.add_parser('list', help='List local mounts')
+    clear_sub_parser = sub_parsers.add_parser('clear', help='Clear all mounts')
+    init_sub_parser = sub_parsers.add_parser('init', help='No op')
+    detach_sub_parser = sub_parsers.add_parser('detach', help='No op')
+
+    mount_sub_parser = sub_parsers. \
+        add_parser('mount',
+                   help='Example: sudo ./v3vol.py mount --mount=dir=/tmp/mymnt '
+                        '--json-params=\'{"container":"datalake"}\'')
+    mount_sub_parser.add_argument('-md', '--mount-dir', type=str, required=True)
+    mount_sub_parser.add_argument('-jp', '--json-params', type=str)
+
+    unmount_sub_parser = sub_parsers. \
+        add_parser('unmount', help='Example: sudo ./v3vol.py unmount --mount=dir=/tmp/mymnt')
+    unmount_sub_parser.add_argument('-md', '--mount-dir', type=str, required=True)
+
+    return _parser
 
 
 if __name__ == '__main__':
@@ -279,14 +284,14 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     v3args = load_config()
-    debug = v3args['debug']
+    DEBUG = v3args['debug']
 
-    debug_print(debug, args)
+    debug_print(args)
 
     if args.action == 'mount':
         mount(args.mount_dir, args.json_params, v3args)
     elif args.action == 'unmount':
-        unmount(args.mount_dir, args.json_params)
+        unmount(args.mount_dir)
     elif args.action == 'attach':
         exit_successfully(device='/dev/null')
     elif args.action in ['detach', 'init']:
@@ -300,5 +305,4 @@ if __name__ == '__main__':
             m = re.match(r'^v3io.*on (.*) type', l, re.M | re.I)
             if m:
                 unmount(m.group(1), '')
-    elif args.action == 'config':
-        load_config(args.mount_dir)
+
