@@ -269,6 +269,7 @@ def register_arguments():
     sub_parsers.add_parser('clear', help='Clear all mounts')
     sub_parsers.add_parser('init', help='No op')
     sub_parsers.add_parser('detach', help='No op')
+    sub_parsers.add_parser('attach', help='No op')
 
     # mount
     mount_sub_parser = sub_parsers. \
