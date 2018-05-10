@@ -1,37 +1,77 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
-import json, os, sys, time, requests, envoy, re
+import json
+import os
+import sys
+import time
+import requests
+import subprocess
+import shlex
+import re
+import argparse
 
 V3IO_CONF_PATH = '/etc/v3io'
-debug = False
+DEBUG = False
 
 
-def perr(msg):
-    txt = '{ "status": "Failure", "message": "%s"}' % msg
-    # print txt
-    sys.exit(txt)
 
-def docmd(txt):
-    cmd = '/bin/bash -c "{0}"'.format(txt)
+def debug_print(txt):
+    if DEBUG:
+        with open('/tmp/v3vol.log', 'a') as hs:
+            hs.write(str(txt) + '\n')
 
-    #p = Popen(txt.split(),stdout=PIPE)
-    #sout, serr = p.communicate()
-    #return p.returncode, sout, serr
 
-    r = envoy.run(cmd)
-    return r.status_code, r.std_out, r.std_err
+def fail_and_exit(msg, **kwargs):
+    failure_object = {'status': 'Failure', 'message': msg}
+    failure_object.update(**kwargs)
+    error_json = json.dumps(failure_object)
+    sys.exit(error_json)
 
-def ismounted(mnt):
-    ecode, sout, serr = docmd('findmnt -n %s' % mnt)
-    if ecode or sout.split()[0]<>mnt:
+
+def exit_successfully(**kwargs):
+    success_object = {'status': 'Success'}
+    success_object.update(**kwargs)
+    print json.dumps(success_object)
+    sys.exit()
+
+
+def run_command(command, cwd=None, quiet=False):
+    debug_print('Running cmd: {0}'.format(command))
+
+    pipes = subprocess.Popen(shlex.split(command),
+                             cwd=cwd,
+                             shell=False,
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+    stdout, stderr = pipes.communicate()
+    retcode = pipes.returncode
+
+    if retcode:
+        if quiet:
+            debug_print('Command failed quietly. stdout: {0}, stderr: {1}, retcode: {2}'.
+                        format(stdout, stderr, retcode))
+        else:
+            fail_and_exit('Command failed', command=command, stdout=stdout, stderr=stderr, retcode=retcode)
+    else:
+        debug_print('Command ran successfully. stdout: {0}, stderr: {1}, retcode: {2}'
+                    .format(stdout, stderr, retcode))
+    return stdout, stderr, retcode
+
+
+def is_mounted(mount_path):
+    stdout, stderr, retcode = run_command('findmnt -n {0}'.format(mount_path), quiet=True)
+    if retcode or stdout.split()[0] != mount_path:
         return False
     return True
+
 
 def create_control_session(url, username, password):
     return create_session(url, username, password, 'control')
 
+
 def create_data_session(url, username, password):
     return create_session(url, username, password, 'data')
+
 
 def create_session(url, username, password, session_type='control'):
     payload = {
@@ -48,215 +88,229 @@ def create_session(url, username, password, session_type='control'):
 
     r = requests.post(url + '/api/sessions', json=payload)
 
-    if r.status_code <> 201:
-        return 1, "Error %d creating session %s" % (r.status_code, r.text)
+    if r.status_code != 201:
+        return False, "Error %d creating session %s" % (r.status_code, r.text)
 
     # Get cookie
     session_id = r.json()['data']['id']
     cookie = {'sid': session_id}
-    return 0, cookie
+    return True, cookie
+
 
 def cookie_to_headers(cookie):
     return {
-        'Cookie': 'session=j:' + json.dumps(cookie)
+        'Cookie': 'session=j:{0}'.format(json.dumps(cookie))
     } if cookie is not None else None
 
+
 def list_containers(url, session_cookie):
-    r = requests.get(url + '/api/containers', headers=cookie_to_headers(session_cookie))
-    if r.status_code <> 200 :
-        return 1,"Error %d reading containers %s" % (r.status_code,r.text)
-    clist= []
-    for c in r.json()['data'] :
-        clist += [c['attributes']['name']]
-    return 0, clist
+    response = requests.get(url + '/api/containers', headers=cookie_to_headers(session_cookie))
+    if response.status_code != 200:
+        fail_and_exit('Error reading containers', status_code=response.status_code, response=response.text)
+
+    container_names = []
+    for container in response.json()['data']:
+        container_names += [container['attributes']['name']]
+    return container_names
+
 
 def create_container(url, name, session_cookie):
     payload = {'data': {'type': 'container', 'attributes': {'name': name}}}
-    r = requests.post(url + '/api/containers', json=payload, headers=cookie_to_headers(session_cookie))
-    if r.status_code != requests.codes.created:
-        return r.status_code,'failed creating container name:%s, reason:%s %s' % (name, r.status_code, r.content)
-    return 0, eval(r.content)
+    response = requests.post(url + '/api/containers', json=payload, headers=cookie_to_headers(session_cookie))
+    if response.status_code != requests.codes.created:
+        fail_and_exit('Failed creating data container',
+                      container_name=name,
+                      status_code=response.status_code,
+                      response=response.text)
+    return response.json()
 
-def usage():
-    print 'Failed to execute , usage:\n'
-    print '  init'
-    print '  list'
-    print '  attach <json params>'
-    print '  detach <mount device>'
-    print '  mount <mount dir> [<mount device>] <json params>'
-    print '  unmount <mount dir>'
-    print '  clear\n'
-    print ' Example: v3io mount /tmp/mymnt {"container":"datalake"}\n'
-    sys.exit(1)
 
-def osmount(fuse_path,dataurl,path,cnt='', data_sid=None):
-    if not ismounted(path):
-        ecode, sout, serr = docmd('mkdir -p %s' % path)
+def osmount(fuse_path, dataurl, v3io_mount_path, container='', data_sid=None):
+    if not is_mounted(v3io_mount_path):
+        run_command('mkdir -p {0}'.format(v3io_mount_path))
 
-        session_arg = '-s %s' % (data_sid) if data_sid is not None else ''
-        print "session:", session_arg
-        if cnt: cnt = '-a ' + cnt
+        session_arg = '-s {0}'.format(data_sid if data_sid is not None else '')
+        print "session:{0}".format(session_arg)
+        if container:
+            container = '-a ' + container
 
-        cmdstr = "nohup %s -c %s -m %s -u on %s %s > /dev/null 2>&1 &" % (fuse_path, dataurl, path, cnt, session_arg)
-        debug_print(debug, cmdstr)
-        os.system(cmdstr)
-        for i in [1,2,4]:
-            time.sleep(i)
-            if ismounted(path): break
+        command = "nohup {0} -c {1} -m {2} -u on {3} {4} > /dev/null 2>&1 &".\
+            format(fuse_path, dataurl, v3io_mount_path, container, session_arg)
+
+        debug_print(command)
+        os.system(command)
+        for i in [1, 2, 4]:
+            if is_mounted(v3io_mount_path):
+                break
+
             if i == 4:
-                perr('Failed to mount device , didnt manage to create fuse mount at %s' % (path))
+                fail_and_exit('Failed to mount device. Failed to create fuse mount at {0}'.format(v3io_mount_path))
+
+            time.sleep(i)
+
 
 def load_config():
 
     try:
-        f=open(V3IO_CONF_PATH+'/v3io.conf','r')
-        return 0, json.loads(f.read())
-    except Exception,err:
-        return 1, 'Failed to mount device %s , Failed to open/read v3io conf at %s (%s)' % (mntpath,V3IO_CONF_PATH,err)
+        with open(V3IO_CONF_PATH + '/v3io.conf', 'r') as f:
+            return json.loads(f.read())
+    except Exception as exc:
+        fail_and_exit('Failed to open/read v3io conf at {0}'.format(V3IO_CONF_PATH), exc=str(exc))
 
-
-def mount(args, v3args):
-    mntpath = args[1]
-    if len(args) == 4 :
-        conf = args[3]
-    else:
-        conf = args[2]
+def mount(mount_path, json_params, v3args):
+    mount_path = os.path.abspath(mount_path)
 
     # load mount policy from json
-    try :
-        js = json.loads(conf)
-    except :
-            perr('Failed to mount device %s , bad json %s' % (mntpath,args[2]))
-    cnt = js.get('container','').strip()
+    params = {}
+    try:
+        params = json.loads(json_params)
+    except Exception as exc:
+        fail_and_exit('Failed to mount device {0}'.format(mount_path), exc=str(exc))
 
-    if cnt == '' :
-            perr('Failed to mount device %s , missing container name in %s' % (mntpath,args[2]))
+    container_name = params.get('container','').strip()
 
-    cluster = js.get('cluster','default').strip()
-    subpath = js.get('subpath','').strip()
-    dedicate = js.get('dedicate','true').strip().lower()   # dedicated Fuse mount (vs shared)
-    createnew = js.get('create','false').strip().lower()   # create container if doesnt exist
-    username = js.get('username', '').strip()              # username for authentication
-    username = js.get('kubernetes.io/secret/username', username).strip()    # username from secret
-    password = js.get('password', '').strip()              # pw for authentication
-    password = js.get('kubernetes.io/secret/password', password).strip()    # pw from secret
+    if container_name == '':
+        fail_and_exit('Failed to mount device {0} , missing container name in {1}'.format(mount_path, json_params))
+
+    cluster = params.get('cluster','default').strip()
+    subpath = params.get('subpath','').strip()
+    dedicate = params.get('dedicate','true').strip().lower()   # dedicated Fuse mount (vs shared)
+    container_create = params.get('create','false').strip().lower()   # create container if doesnt exist
+    username = params.get('username', '').strip()              # username for authentication
+    username = params.get('kubernetes.io/secret/username', username).strip()    # username from secret
+    password = params.get('password', '').strip()              # pw for authentication
+    password = params.get('kubernetes.io/secret/password', password).strip()    # pw from secret
 
     if not len(username):
-        perr('Authentication details missing. Please provide username')
+        fail_and_exit('Authentication details missing. Please provide username')
     if not len(password):
-        perr('Authentication details missing. Please provide password')
+        fail_and_exit('Authentication details missing. Please provide password')
 
     # Get v3io configuration
     root_path = v3args['root_path']
     fuse_path = v3args['fuse_path']
-    cl = v3args['clusters'][0]  #TBD support for multi-cluster
-    apiurl = cl['api_url']
-    dataurl = cl['data_url']
+
+    # TBD support for multi-cluster
+    clusters = v3args['clusters'][0]
+
+    api_url = clusters['api_url']
+    data_url = clusters['data_url']
 
     # create control and data sessions
-    e, ctrl_cookie = create_control_session(apiurl, username, password)
-    if e: perr('Failed to create control session %s' % (ctrl_cookie))
-    e, data_cookie = create_data_session(apiurl, username, password)
-    if e: perr('Failed to create data session %s' % (data_cookie))
+    success, ctrl_cookie = create_control_session(api_url, username, password)
+    if not success:
+        fail_and_exit('Failed to create control session {0}'.format(ctrl_cookie))
+    success, data_cookie = create_data_session(api_url, username, password)
+    if not success:
+        fail_and_exit('Failed to create data session {0}'.format(data_cookie))
 
     data_sid = data_cookie['sid']
 
     # check if data container exist
-    e, lc = list_containers(apiurl, ctrl_cookie)
-    if e : perr(lc)
-    if cnt not in lc :
-        if createnew in ['true','yes','y'] :
-            e, data = create_container(apiurl, cnt, ctrl_cookie)
-            if e : perr('Failed to mount device %s , cant create Data Container %s (%s)' % (mntpath,cnt,data))
-        else :
-            perr('Failed to mount device %s , Data Container %s doesnt exist' % (mntpath,cnt))
+    container_names = list_containers(api_url, ctrl_cookie)
+
+    if container_name not in container_names:
+        if container_create.lower() in ['true','yes','y']:
+            _ = create_container(api_url, container_name, ctrl_cookie)
+
+        else:
+            fail_and_exit('Failed to mount device {0} , Data Container {1} doesn\'t exist'
+                          .format(mount_path, container_name))
 
     # if we want a dedicated v3io connection
     if dedicate in ['true','yes','y']:
-        osmount(fuse_path, dataurl, mntpath, cnt, data_sid=data_sid)
-        print '{"status": "Success"}'
-        sys.exit()
-
-    #if not os.path.isdir(cpath) :
+        osmount(fuse_path, data_url, mount_path, container_name, data_sid=data_sid)
+        exit_successfully()
 
     # if shared fuse mount is not up, mount it
-    v3mpath = '/'.join([root_path,cluster])
-    osmount(fuse_path,dataurl,v3mpath, data_sid=data_sid)
-    cpath = '/'.join([v3mpath,cnt])
+    v3_mount_path = os.path.join(root_path, cluster)
+    osmount(fuse_path, data_url, v3_mount_path, data_sid=data_sid)
+    container_path = os.path.join(v3_mount_path, container_name)
 
     # create subpath
     if subpath:
-        cpath = '/'.join([cpath,subpath])
-        ecode, sout, serr = docmd('mkdir -p %s' % cpath)
-        if ecode :
-            perr('Failed to create subpath %s under container %s, %s, %s' % (subpath,cnt,sout,serr))
+        container_path = os.path.join(container_path, subpath)
+        run_command('mkdir -p {0}'.format(container_path))
 
     # mkdir
-    ecode, sout, serr = docmd('mkdir -p %s' % mntpath)
-    if ecode :
-        perr('Failed to create mount dir %s %s %s' % (mntpath,sout,serr))
+    run_command('mkdir -p {0}'.format(mount_path))
 
     # mount bind
-    cmd = "/bin/mount --bind '%s' '%s'" % (cpath,mntpath)
-    ecode, sout, serr = docmd(cmd)
-    if ecode :
-        perr('Failed to bind mount dir %s to %s, %s, %s' % (cpath,mntpath,sout,serr))
+    run_command('/bin/mount --bind "{0}" "{1}"'.format(container_path, mount_path))
 
-    print '{"status": "Success"}'
+    exit_successfully()
 
-def unmount(args):
-    mntpath = args[1]
-    if mntpath[-1:]=='/' : mntpath=mntpath[:-1]  # remove trailing /
 
-    if not ismounted(mntpath):
-        print '{"status": "Success"}'
-        sys.exit()
+def unmount(mount_path):
+    mount_path = os.path.abspath(mount_path)
 
-    ecode, sout, serr = docmd('umount "%s"' % mntpath)
-    if ecode :
-        perr('Failed to unmount %s , %s, %s' % (mntpath,sout,serr))
+    if not is_mounted(mount_path):
+        exit_successfully()
 
-    os.rmdir(mntpath)
-    print '{"status": "Success"}'
+    retcode, stdout, stderr = run_command('umount "{0}"'.format(mount_path))
+    if retcode:
+        fail_and_exit('Failed to unmount {0}'.format(mount_path),
+                      stdout=stdout,
+                      stderr=stderr,
+                      retcode=retcode)
 
-def debug_print(debug, txt):
-    if debug :
-        hs = open("/tmp/v3vol.log", "a")
-        hs.write(str(txt) + "\n")
-        hs.close()
+    os.rmdir(mount_path)
+    exit_successfully()
+
+
+def register_arguments():
+    _parser = argparse.ArgumentParser(prog='v3vol', add_help=True)
+    sub_parsers = _parser.add_subparsers(dest='action')
+    sub_parsers.required = True
+
+
+    # No additional args needed for those actions
+    sub_parsers.add_parser('list', help='List local mounts')
+    sub_parsers.add_parser('clear', help='Clear all mounts')
+    sub_parsers.add_parser('init', help='No op')
+    sub_parsers.add_parser('detach', help='No op')
+    sub_parsers.add_parser('attach', help='No op')
+
+    # mount
+    mount_sub_parser = sub_parsers. \
+        add_parser('mount',
+                   help='Example: ./v3vol.py mount --mount=dir=/tmp/mymnt '
+                        '--json-params=\'{"container":"datalake"}\'')
+    mount_sub_parser.add_argument('-md', '--mount-dir', type=str, required=True)
+    mount_sub_parser.add_argument('-jp', '--json-params', type=str)
+
+    # unmount
+    unmount_sub_parser = sub_parsers. \
+        add_parser('unmount', help='Example: ./v3vol.py unmount --mount=dir=/tmp/mymnt')
+    unmount_sub_parser.add_argument('-md', '--mount-dir', type=str, required=True)
+
+    return _parser
+
 
 if __name__ == '__main__':
-    args = sys.argv
-    if len(args) < 2 : usage()
-    cmd = args[1].lower()
-    if cmd in ['mount','unmount','config'] and len(args) < 3 : usage()
+    parser = register_arguments()
+    args = parser.parse_args()
 
-    e, v3args = load_config()
-    if e: perr(v3args)
-    debug = v3args['debug']
-    debug_print(debug, args)
+    v3args = load_config()
+    DEBUG = v3args['debug']
 
-    if   cmd=='mount' :
-        mount(args[1:], v3args)
-    elif cmd=='unmount'  :
-        unmount(args[1:])
-        sys.exit()
-    elif cmd=='attach'  :
-        print '{"status": "Success", "device": "/dev/null"}'
-    elif cmd=='detach' or cmd=='init':
-        print '{"status": "Success"}'
-    elif cmd=='list':
+    debug_print('v3vol arguments: {0}'.format(args))
+
+    if args.action == 'mount':
+        mount(args.mount_dir, args.json_params, v3args)
+    elif args.action == 'unmount':
+        unmount(args.mount_dir)
+    elif args.action == 'attach':
+        exit_successfully(device='/dev/null')
+    elif args.action in ['detach', 'init']:
+        exit_successfully()
+    elif args.action == 'list':
         os.system('mount | grep v3io')
-    elif cmd=='clear':
-        ecode, sout, serr = docmd('mount')
-        lines = sout.splitlines()
-        for l in lines :
-            m = re.match( r'^v3io.*on (.*) type', l, re.M|re.I)
-            if m:
-                print "Unmount: ",m.group(1),
-                unmount(['',m.group(1)])
-        sys.exit()
-    else :
-        usage()
+    elif args.action == 'clear':
+        out, err, _ = run_command('mount', quiet=False)
 
+        for l in out.splitlines():
+            m = re.match(r'^v3io.*on (.*) type', l, re.M | re.I)
+            if m:
+                unmount(m.group(1))
 
