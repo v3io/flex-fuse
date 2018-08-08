@@ -1,0 +1,28 @@
+apiVersion: apps/v1 #  for k8s versions before 1.9.0 use apps/v1beta2  and before 1.8.0 use extensions/v1beta1
+kind: Deployment
+metadata:
+  name: ngvol
+spec:
+  selector:
+    matchLabels:
+      app: fuse-test
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: fuse-test
+    spec:
+      containers:
+      - name: fuser
+        image: nginx:alpine
+        volumeMounts:
+          - name: test
+            mountPath: /data
+      volumes:
+        - name: test
+          flexVolume:
+            driver: "v3io/fuse"
+            options:
+              container: bigdata
+              username: iguazio
+              password: nv5NQcs10V1Nc4ig

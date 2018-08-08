@@ -11,19 +11,11 @@ the same volume (data container) can be accessed **simultaneously** by multiple 
 
 ## Installation
 
-The driver (v3vol.py) need to be placed in the Kubelet volume-plugin directory, by default its:
-
-  `/usr/libexec/kubernetes/kubelet-plugins/volume/exec/igz~v3io/`
-  
-Need to verify it has execution permissions, and Kubelet is started/restarted after placing the driver.
-
-The address to the iguazio data platform(s) should be set in the `/etc/v3io/v3io.conf` file or using `./v3vol.py config  <v3io IP address>`
-
 Requierments:  
  - install v3io-fuse 
 
 ## Security and Session Authentication 
-Access to iguazio data platform must be authenticated, each identity may have different read or write permissions to individual files and directories. The username and password are provided through Kubernetes secrets (see example below), or by using `username` and `password`  options.
+Access to iguazio data platform must be authenticated, each identity may have different read or write permissions to individual files and directories. The username and password are provided by using `username` and `password`  options.
 
 The username and password strings are used to form a unique user session per application container.
 
@@ -46,21 +38,12 @@ spec:
   volumes:
   - name: test
     flexVolume:
-      driver: "igz/v3io"
+      driver: "v3io/fuse"
       secretRef:   
-        name: mysecret
+        name: v3io-fuse-user
       options:
-        container: mydata      # data container name
-        cluster: default       # optional, the name of the data cluster in case we use multiple 
-        subpath: subdir        # optional, sub directory in the data container
-        createnew: false       # optional, if the data container is not found it will create it 
-
-apiVersion: v1
-kind: Secret
-metadata:
-  name: mysecret
-data:
-  username: YWRtaW4=
-  password: MWYyZDFlMmU2N2Rm
+        container: bigdata      # data container name
+        username: myuser        # username
+        password: mypassword    # you get it, right?
 ```
 

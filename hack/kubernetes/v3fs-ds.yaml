@@ -10,40 +10,29 @@ spec:
         app: v3fs-deploy
     spec:
       containers:
-        - image: v3fs-test:latest
-          imagePullPolicy: Never
+        - image: iguaziodocker/fuse:unstable
+          imagePullPolicy: Always
           name: flex-deploy
           securityContext:
               privileged: true
           volumeMounts:
             - mountPath: /flexmnt
               name: flexvolume-mount
-            - mountPath: /etc/v3io
+            - mountPath: /etc/config/v3io
+              name: cfg
+            - mountPath: /etc/v3io/fuse
               name: etc
-            - mountPath: /opt/iguazio
-              name: optigz            
-            - mountPath: /cfg        
-              name: cfg   
 
       volumes:
         - name: flexvolume-mount
           hostPath:
             path: /usr/libexec/kubernetes/kubelet-plugins/volume/exec
-            #type: DirectoryOrCreate
         - name: etc
           hostPath:
-            path: /etc/v3io
-            #type: DirectoryOrCreate
-        - name: optigz
-          hostPath:
-            path: /opt/iguazio
-            #type: DirectoryOrCreate
+            path: /etc/v3io/fuse
         - name: cfg
           configMap:
             name: v3fs-config
-            items:
-            - key: v3io                   
-              path: v3io.conf
 
 ---
 
@@ -51,9 +40,8 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: v3fs-config
-  namespace: default
 data:
-  v3io: |
+  v3io.conf: |
     {
       "version": "1.0",
       "root_path": "/tmp/v3io",
@@ -62,19 +50,8 @@ data:
       "clusters": [
           {
                 "name": "default",
-                "data_url": "tcp://10.10.3.11:1234",
-                "api_url": "http://10.90.0.11:4001"
+                "data_url": "tcp://172.31.45.253:1234",
+                "api_url": "http://172.31.45.253:8001"
           }
       ]
     }
-
----
-
-apiVersion: v1
-kind: Secret
-metadata:
-  name: v3io
-type: Opaque
-data:
-  username: <TBD>
-  password: <TBD>
