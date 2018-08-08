@@ -1,0 +1,17 @@
+sudo: required
+
+services:
+  - docker
+
+addons:
+  apt:
+    packages:
+      - docker-ce
+
+language: go
+go_import_path: github.com/v3io/k8svol
+go: "1.10"
+
+script:
+  - docker build --tag iguaziodocker/fuse:unstable .
+
