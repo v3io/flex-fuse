@@ -10,7 +10,7 @@ spec:
         app: v3fs-deploy
     spec:
       containers:
-        - image: iguaziodocker/fuse:unstable
+        - image: iguaziodocker/flex-fuse:unstable
           imagePullPolicy: Always
           name: flex-deploy
           securityContext:
@@ -47,11 +47,12 @@ data:
       "root_path": "/tmp/v3io",
       "fuse_path": "/home/iguazio/igz/clients/fuse/bin/v3io_adapters_fuse",
       "debug": true,
+      "type": "os",
       "clusters": [
           {
                 "name": "default",
-                "data_url": "tcp://172.31.45.253:1234",
-                "api_url": "http://172.31.45.253:8001"
+                "data_url": "tcp://172.31.32.50:1234",
+                "api_url": "http://172.31.32.50:8001"
           }
       ]
     }

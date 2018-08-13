@@ -40,6 +40,7 @@ type Config struct {
 	RootPath string `json:"root_path"`
 	FusePath string `json:"fuse_path"`
 	Debug    bool   `json:"debug"`
+	Type     string `json:"type"`
 	Clusters []struct {
 		Name    string `json:"name"`
 		DataUrl string `json:"data_url"`

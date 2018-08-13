@@ -12,7 +12,12 @@ the same volume (data container) can be accessed **simultaneously** by multiple 
 ## Installation
 
 Requierments:  
- - install v3io-fuse 
+ - install v3io-fuse
+
+```bash
+$ yum install fuse librdmacm
+$ rpm -iv v3io-fuse.rpm
+```
 
 ## Security and Session Authentication 
 Access to iguazio data platform must be authenticated, each identity may have different read or write permissions to individual files and directories. The username and password are provided by using `username` and `password`  options.

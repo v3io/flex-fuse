@@ -31,12 +31,15 @@ func (m *Mounter) doMount(targetPath string) *Response {
 	if err != nil {
 		return Fail("Could not create session", err)
 	}
-	mountCmd := exec.Command(m.Config.FusePath,
-		"-o", "allow_root",
+
+	args := []string{"-o", "allow_root",
 		"--connection_strings", m.Config.DataURLs(),
 		"--mountpoint", targetPath,
-		"-a", m.Spec.Container,
-		"--session_key", session)
+		"--session_key", session}
+	if m.Spec.Container != "" {
+		args = append(args, "-a", m.Spec.Container)
+	}
+	mountCmd := exec.Command(m.Config.FusePath, args...)
 
 	journal.Debug("calling mount command", "path", mountCmd.Path, "args", mountCmd.Args)
 	if err := mountCmd.Start(); err != nil {
@@ -51,29 +54,33 @@ func (m *Mounter) doMount(targetPath string) *Response {
 	return Fail(fmt.Sprintf("Could not mount due to timeout: %s", m.Target), nil)
 }
 
-func (m *Mounter) Mount() *Response {
-	targetPath := path.Clean(m.Target)
-	if isStaleMount(targetPath) {
-		journal.Debug("calling isStaleMount command", "target", targetPath)
-		unmountCmd := exec.Command("umount", targetPath)
+func (m *Mounter) osMount() *Response {
+	journal.Info("calling osMount command", "target", m.Target)
+	if isStaleMount(m.Target) {
+		unmountCmd := exec.Command("umount", m.Target)
 		out, err := unmountCmd.CombinedOutput()
 		if err != nil {
-			return Fail(fmt.Sprintf("Could not unmount stale mount %s: %s", targetPath, out), err)
+			return Fail(fmt.Sprintf("Could not unmount stale mount %s: %s", m.Target, out), err)
 		}
 	}
 
-	journal.Debug("calling isMountPoint command", "target", targetPath)
-	if !isMountPoint(targetPath) {
-		return m.doMount(targetPath)
+	if !isMountPoint(m.Target) {
+		return m.doMount(m.Target)
 	}
 	return Success(fmt.Sprintf("Already mounted: %s", m.Target))
 }
 
-func (m *Mounter) MountAsLink() *Response {
-	journal.Info("calling MountAsLink command", "target", m.Target)
-	targetPath := path.Join("/mnt/v3io", m.Spec.Container)
+func (m *Mounter) Mount() *Response {
+	if m.Config.Type == "os" {
+		return m.osMount()
+	}
+	return m.mountAsLink()
+}
+
+func (m *Mounter) mountAsLink() *Response {
+	journal.Info("calling mountAsLink command", "target", m.Target)
+	targetPath := path.Join("/mnt/v3io", m.Spec.Namespace, m.Spec.Container)
 	response := &Response{}
-	journal.Debug("calling isMountPoint command", "target", targetPath)
 	if !isMountPoint(targetPath) {
 		journal.Debug("creating folder", "target", targetPath)
 		os.MkdirAll(targetPath, 0755)
@@ -89,25 +96,38 @@ func (m *Mounter) MountAsLink() *Response {
 	return response
 }
 
-func (m *Mounter) UnmountAsLink() *Response {
-	journal.Info("calling UnmountAsLink command", "target", m.Target)
+func (m *Mounter) unmountAsLink() *Response {
+	journal.Info("calling unmountAsLink command", "target", m.Target)
 	if err := os.Remove(m.Target); err != nil {
 		return Fail("unable to remove link", err)
 	}
 	return Success("link removed")
 }
 
-func (m *Mounter) Unmount() *Response {
-	journal.Info("calling Unmount command", "target", m.Target)
-	targetPath := path.Clean(m.Target)
-	if isMountPoint(targetPath) {
-		journal.Debug("calling isMountPoint command", "target", targetPath)
-		output, err := exec.Command("umount", targetPath).CombinedOutput()
-		if err != nil {
-			return Fail(fmt.Sprintf("cloud not unmount: %s", string(output)), err)
+func (m *Mounter) osUmount() *Response {
+	journal.Info("calling osUmount command", "target", m.Target)
+	if isMountPoint(m.Target) {
+		cmd := exec.Command("umount", m.Target)
+		journal.Debug("calling umount command", "path", cmd.Path, "args", cmd.Args)
+		if err := cmd.Start(); err != nil {
+			return Fail("could not unmount", err)
 		}
+		for _, interval := range []time.Duration{1, 2, 4} {
+			if !isMountPoint(m.Target) {
+				return Success("Unmount completed!")
+			}
+			time.Sleep(interval * time.Second)
+		}
+		return Fail(fmt.Sprintf("Could not umount due to timeout: %s", m.Target), nil)
 	}
 	return Success("Unmount completed!")
+}
+
+func (m *Mounter) Unmount() *Response {
+	if m.Config.Type == "os" {
+		return m.osUmount()
+	}
+	return m.unmountAsLink()
 }
 
 func NewMounter(target, options string) (*Mounter, error) {
@@ -134,7 +154,7 @@ func Mount(target, options string) *Response {
 	if err != nil {
 		return Fail("unable to create mounter", err)
 	} else {
-		return mounter.MountAsLink()
+		return mounter.Mount()
 	}
 }
 
@@ -143,6 +163,6 @@ func Unmount(target string) *Response {
 	if err != nil {
 		return Fail("unable to create mounter", err)
 	} else {
-		return mounter.UnmountAsLink()
+		return mounter.Unmount()
 	}
 }

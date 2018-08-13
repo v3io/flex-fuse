@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/v3io/k8svol/pkg/flex"
+	"github.com/v3io/k8svol/pkg/journal"
 )
 
 func main() {
@@ -15,10 +16,11 @@ func main() {
 	case "mount":
 		result = flex.Mount(os.Args[2], os.Args[3])
 	case "unmount":
-		flex.Unmount(os.Args[2])
+		result = flex.Unmount(os.Args[2])
 	default:
 		result = flex.MakeResponse("Not supported", fmt.Sprintf("Operation %s is not supported", action))
 	}
 
+	journal.Info("Completed flex flow", "result", result)
 	result.PrintJson()
 }
