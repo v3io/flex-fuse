@@ -23,5 +23,5 @@ func main() {
 	}
 
 	journal.Info("Completed flex flow", "result", result)
-	result.PrintJson()
+	result.ToJson()
 }

@@ -104,12 +104,20 @@ type Response struct {
 	Capabilities map[string]interface{} `json:"capabilities"`
 }
 
-func (r *Response) PrintJson() {
+func (r *Response) String() string {
+	if len(r.Capabilities) > 0 {
+		return fmt.Sprintf("Response[Status=%s, Message=%s, Capabilities=%s]", r.Status, r.Message, r.Capabilities)
+	}
+	return fmt.Sprintf("Response[Status=%s, Message=%s]", r.Status, r.Message)
+}
+
+func (r *Response) ToJson() {
 	jsonBytes, err := json.Marshal(r)
 	if err != nil {
-		panic(err)
+		fmt.Printf(`{"status": "Failure", "Message": "%s"}`, err)
+	} else {
+		fmt.Printf("%s", string(jsonBytes))
 	}
-	fmt.Printf("%s", string(jsonBytes))
 }
 
 type VolumeSpec struct {

@@ -18,6 +18,8 @@ cp "/$DRIVER" "/flexmnt/$driver_dir/.$DRIVER"
 mv -f "/flexmnt/$driver_dir/.$DRIVER" "/flexmnt/$driver_dir/$DRIVER"
 
 cp "/etc/config/v3io/v3io.conf" "/etc/v3io/fuse/v3io.conf"
+cp "/install.sh" "/flexmnt/$driver_dir/"
+cp -r "/libs" "/flexmnt/$driver_dir/"
 
 while : ; do
   sleep 3600

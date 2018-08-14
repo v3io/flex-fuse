@@ -13,5 +13,5 @@ go_import_path: github.com/v3io/k8svol
 go: "1.10"
 
 script:
-  - docker build --tag iguaziodocker/flex-fuse:unstable .
+  - make build
 

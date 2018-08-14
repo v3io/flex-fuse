@@ -11,12 +11,11 @@ the same volume (data container) can be accessed **simultaneously** by multiple 
 
 ## Installation
 
-Requierments:  
- - install v3io-fuse
-
+When Kubernetes loads the plugin, v3io driver will install the required packages and v3io-fuse executable.
+The following commands will be executed (check [install.sh](hack/scripts/install.sh) for complete overview):
 ```bash
 $ yum install fuse librdmacm
-$ rpm -iv v3io-fuse.rpm
+$ rpm -ivh igz-fuse.rpm
 ```
 
 ## Security and Session Authentication 

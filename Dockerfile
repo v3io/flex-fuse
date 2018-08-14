@@ -12,6 +12,8 @@ RUN go build -o ${GOPATH}/fuse ${PROJECT_PATH}/cmd/fuse/main.go
 FROM alpine:3.6
 
 COPY hack/scripts/deploy.sh /usr/local/bin
+COPY hack/scripts/install.sh /install.sh
+COPY hack/libs /libs
 COPY --from=builder /go/fuse /fuse
 
 CMD ["/bin/ash","/usr/local/bin/deploy.sh"]

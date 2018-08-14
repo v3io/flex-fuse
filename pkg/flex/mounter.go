@@ -10,15 +10,6 @@ import (
 	"time"
 )
 
-/// Return status
-func Init() *Response {
-	resp := MakeResponse("Success", "No Initialization required")
-	resp.Capabilities = map[string]interface{}{
-		"attach": false,
-	}
-	return resp
-}
-
 type Mounter struct {
 	Target string
 	Spec   *VolumeSpec
@@ -165,4 +156,30 @@ func Unmount(target string) *Response {
 	} else {
 		return mounter.Unmount()
 	}
+}
+
+func Init() *Response {
+	journal.Info("calling init command")
+	config, err := ReadConfig()
+	if err != nil {
+		return Fail("Initialization script failed to read config", err)
+	}
+	_, staterr := os.Stat(config.FusePath)
+	if staterr != nil {
+		if os.IsNotExist(err) {
+			location := path.Dir(os.Args[0])
+			command := exec.Command("/bin/bash", path.Join(location, "install.sh"))
+			journal.Debug("calling install command", "path", command.Path, "args", command.Args)
+			if err := command.Run(); err != nil {
+				return Fail("Initialization script failed", err)
+			}
+		}
+		return Fail("Initialization script failed to get fuse status", staterr)
+	}
+
+	resp := Success("Initialization completed")
+	resp.Capabilities = map[string]interface{}{
+		"attach": false,
+	}
+	return resp
 }
