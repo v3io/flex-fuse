@@ -16,13 +16,13 @@ spec:
       - name: fuser
         image: nginx:alpine
         volumeMounts:
-          - name: test
-            mountPath: /data
+          - name: v3io
+            mountPath: /v3io
       volumes:
-        - name: test
+        - name: v3io
           flexVolume:
             driver: "v3io/fuse"
+            secretRef:
+              name: v3io-user-fuse
             options:
               container: bigdata
-              username: iguazio
-              password: a8a4yzvPLoh6QNIq

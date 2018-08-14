@@ -48,7 +48,15 @@ spec:
         name: v3io-fuse-user
       options:
         container: bigdata      # data container name
-        username: myuser        # username
-        password: mypassword    # you get it, right?
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: v3io-fuse-user
+type: v3io/fuse
+data:
+  username: aWd1YXppbwo=
+  tenant: aWd1YXppbwo=
+  password: YThhNHl6dlBMb2g2UU5JcQo=
 ```
 

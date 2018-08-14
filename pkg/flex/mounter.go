@@ -27,7 +27,7 @@ type Mounter struct {
 }
 
 func (m *Mounter) doMount(targetPath string) *Response {
-	session, err := m.Config.DataSession(m.Spec.Username, m.Spec.Password)
+	session, err := m.Config.DataSession(m.Spec.GetFullUsername(), m.Spec.GetPassword())
 	if err != nil {
 		return Fail("Could not create session", err)
 	}

@@ -10,6 +10,7 @@ import (
 
 func main() {
 	var result *flex.Response
+	journal.Debug("Handling driver request", os.Args)
 	switch action := os.Args[1]; action {
 	case "init":
 		result = flex.Init()

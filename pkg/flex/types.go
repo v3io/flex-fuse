@@ -1,6 +1,7 @@
 package flex
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/v3io/k8svol/pkg/journal"
@@ -114,9 +115,37 @@ func (r *Response) PrintJson() {
 type VolumeSpec struct {
 	SubPath   string `json:"subPath"`
 	Container string `json:"container"`
-	Username  string `json:"username"`
-	Password  string `json:"password"`
+	Username  string `json:"kubernetes.io/secret/username"`
+	Password  string `json:"kubernetes.io/secret/password"`
+	Tenant    string `json:"kubernetes.io/secret/tenant"`
 	PodName   string `json:"kubernetes.io/pod.name"`
 	Namespace string `json:"kubernetes.io/pod.namespace"`
 	Name      string `json:"kubernetes.io/pvOrVolumeName"`
+}
+
+func (VolumeSpec) decodeOrDefault(value string) string {
+	bytes, err := base64.StdEncoding.DecodeString(value)
+	if err != nil {
+		return value
+	}
+	return string(bytes)
+}
+
+func (vs *VolumeSpec) GetUsername() string {
+	return vs.decodeOrDefault(vs.Username)
+}
+
+func (vs *VolumeSpec) GetTenant() string {
+	return vs.decodeOrDefault(vs.Tenant)
+}
+
+func (vs *VolumeSpec) GetPassword() string {
+	return vs.decodeOrDefault(vs.Password)
+}
+
+func (vs *VolumeSpec) GetFullUsername() string {
+	if vs.Tenant != "" {
+		return fmt.Sprintf("%s@%s", vs.GetUsername(), vs.GetTenant())
+	}
+	return vs.GetUsername()
 }
