@@ -166,15 +166,16 @@ func Init() *Response {
 	}
 	_, staterr := os.Stat(config.FusePath)
 	if staterr != nil {
-		if os.IsNotExist(err) {
+		if os.IsNotExist(staterr) {
 			location := path.Dir(os.Args[0])
 			command := exec.Command("/bin/bash", path.Join(location, "install.sh"))
 			journal.Debug("calling install command", "path", command.Path, "args", command.Args)
 			if err := command.Run(); err != nil {
 				return Fail("Initialization script failed", err)
 			}
+		} else {
+			return Fail("Initialization script failed to get fuse status", staterr)
 		}
-		return Fail("Initialization script failed to get fuse status", staterr)
 	}
 
 	resp := Success("Initialization completed")
