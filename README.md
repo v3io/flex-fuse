@@ -35,18 +35,19 @@ spec:
   - name: nginx
     image: nginx
     volumeMounts:
-    - name: test
-      mountPath: /data
+    - name: v3io
+      mountPath: /v3io
     ports:
     - containerPort: 80
   volumes:
-  - name: test
+  - name: v3io
     flexVolume:
       driver: "v3io/fuse"
       secretRef:   
         name: v3io-fuse-user
       options:
         container: bigdata      # data container name
+        cluster: default        # which cluster to connect to (optional, default to "default")
 ---
 apiVersion: v1
 kind: Secret

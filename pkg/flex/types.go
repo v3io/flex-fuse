@@ -37,16 +37,18 @@ func ReadConfig() (*Config, error) {
 	return &config, nil
 }
 
+type ClusterConfig struct {
+	Name     string   `json:"name"`
+	DataUrls []string `json:"data_urls"`
+	ApiUrl   string   `json:"api_url"`
+}
+
 type Config struct {
-	RootPath string `json:"root_path"`
-	FusePath string `json:"fuse_path"`
-	Debug    bool   `json:"debug"`
-	Type     string `json:"type"`
-	Clusters []struct {
-		Name    string `json:"name"`
-		DataUrl string `json:"data_url"`
-		ApiUrl  string `json:"api_url"`
-	} `json:"clusters"`
+	RootPath string          `json:"root_path"`
+	FusePath string          `json:"fuse_path"`
+	Debug    bool            `json:"debug"`
+	Type     string          `json:"type"`
+	Clusters []ClusterConfig `json:"clusters"`
 }
 
 type sessionResponse struct {
@@ -55,27 +57,44 @@ type sessionResponse struct {
 	} `json:"data"`
 }
 
-func (c *Config) DataURLs() string {
-	result := make([]string, len(c.Clusters), len(c.Clusters))
-	for index, item := range c.Clusters {
-		result[index] = item.DataUrl
+func (c *Config) findCluster(cluster string) (*ClusterConfig, error) {
+	for _, clusterConfig := range c.Clusters {
+		if clusterConfig.Name == cluster {
+			return &clusterConfig, nil
+		}
 	}
-	return strings.Join(result, ",")
+	return nil, fmt.Errorf("no such cluster %s", cluster)
 }
 
-func (c *Config) ControlSession(username, password string) (string, error) {
-	return c.Session(username, password, "control")
+func (c *Config) DataURLs(cluster string) (string, error) {
+	clusterConfig, err := c.findCluster(cluster)
+	if err != nil {
+		return "", err
+	}
+	result := make([]string, len(clusterConfig.DataUrls), len(clusterConfig.DataUrls))
+	for index, item := range clusterConfig.DataUrls {
+		result[index] = item
+	}
+	return strings.Join(result, ","), nil
 }
 
-func (c *Config) DataSession(username, password string) (string, error) {
-	return c.Session(username, password, "data")
+func (c *Config) ControlSession(spec *VolumeSpec) (string, error) {
+	return c.Session(spec.GetClusterName(), spec.GetFullUsername(), spec.GetPassword(), "control")
 }
 
-func (c *Config) Session(username, password, plane string) (string, error) {
+func (c *Config) DataSession(spec *VolumeSpec) (string, error) {
+	return c.Session(spec.GetClusterName(), spec.GetFullUsername(), spec.GetPassword(), "data")
+}
+
+func (c *Config) Session(cluster, username, password, plane string) (string, error) {
+	clusterConfig, err := c.findCluster(cluster)
+	if err != nil {
+		return "", err
+	}
 	payload := strings.NewReader(fmt.Sprintf(v3ioSessionPayloadTemplate, plane, username, password))
-	journal.Debug("creating session", "plane", plane, "url", fmt.Sprintf("%s/api/sessions", c.Clusters[0].ApiUrl))
+	journal.Debug("creating session", "plane", plane, "url", fmt.Sprintf("%s/api/sessions", clusterConfig.ApiUrl))
 	response, err := http.Post(
-		fmt.Sprintf("%s/api/sessions", c.Clusters[0].ApiUrl),
+		fmt.Sprintf("%s/api/sessions", clusterConfig.ApiUrl),
 		"application/json",
 		payload)
 	if err != nil {
@@ -123,6 +142,7 @@ func (r *Response) ToJson() {
 type VolumeSpec struct {
 	SubPath   string `json:"subPath"`
 	Container string `json:"container"`
+	Cluster   string `json:"cluster"`
 	Username  string `json:"kubernetes.io/secret/username"`
 	Password  string `json:"kubernetes.io/secret/password"`
 	Tenant    string `json:"kubernetes.io/secret/tenant"`
@@ -156,4 +176,11 @@ func (vs *VolumeSpec) GetFullUsername() string {
 		return fmt.Sprintf("%s@%s", vs.GetUsername(), vs.GetTenant())
 	}
 	return vs.GetUsername()
+}
+
+func (vs *VolumeSpec) GetClusterName() string {
+	if vs.Cluster == "" {
+		return "default"
+	}
+	return vs.Cluster
 }

@@ -18,13 +18,18 @@ type Mounter struct {
 }
 
 func (m *Mounter) doMount(targetPath string) *Response {
-	session, err := m.Config.DataSession(m.Spec.GetFullUsername(), m.Spec.GetPassword())
+	session, err := m.Config.DataSession(m.Spec)
 	if err != nil {
 		return Fail("Could not create session", err)
 	}
 
+	dataUrls, err := m.Config.DataURLs(m.Spec.GetClusterName())
+	if err != nil {
+		return Fail("could not get cluster data urls", err)
+	}
+
 	args := []string{"-o", "allow_root",
-		"--connection_strings", m.Config.DataURLs(),
+		"--connection_strings", dataUrls,
 		"--mountpoint", targetPath,
 		"--session_key", session}
 	if m.Spec.Container != "" {
@@ -62,10 +67,10 @@ func (m *Mounter) osMount() *Response {
 }
 
 func (m *Mounter) Mount() *Response {
-	if m.Config.Type == "os" {
-		return m.osMount()
+	if m.Config.Type == "link" {
+		return m.mountAsLink()
 	}
-	return m.mountAsLink()
+	return m.osMount()
 }
 
 func (m *Mounter) mountAsLink() *Response {
@@ -115,10 +120,10 @@ func (m *Mounter) osUmount() *Response {
 }
 
 func (m *Mounter) Unmount() *Response {
-	if m.Config.Type == "os" {
-		return m.osUmount()
+	if m.Config.Type == "link" {
+		return m.unmountAsLink()
 	}
-	return m.unmountAsLink()
+	return m.osUmount()
 }
 
 func NewMounter(target, options string) (*Mounter, error) {
