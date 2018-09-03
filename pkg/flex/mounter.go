@@ -28,7 +28,7 @@ func (m *Mounter) doMount(targetPath string) *Response {
 		return Fail("could not get cluster data urls", err)
 	}
 
-	args := []string{"-o", "allow_root",
+	args := []string{"-o", "allow_other",
 		"--connection_strings", dataUrls,
 		"--mountpoint", targetPath,
 		"--session_key", session}

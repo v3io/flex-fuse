@@ -1,7 +1,7 @@
 RPM_PATH = "iguazio_yum"
 DEB_PATH = "iguazio_deb"
 BINARY_NAME = "igz-fuse"
-RELEASE_VERSION = "0.4.0"
+RELEASE_VERSION = "0.5.0"
 
 .PHONY: build
 build:
