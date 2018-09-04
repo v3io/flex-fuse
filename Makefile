@@ -15,7 +15,7 @@ download:
 
 .PHONY: release
 release: check-req download build
-	docker tag iguaziodocker/flex-fuse:unstable iguaziodocker/flex-fuse:$(IGUAZIO_VERSION)-$(RELEASE_VERSION)
+	docker tag iguaziodocker/flex-fuse:unstable iguaziodocker/flex-fuse:$(IGUAZIO_VERSION:igz_%=%)-$(RELEASE_VERSION)
 
 check-req:
 ifndef MIRROR
