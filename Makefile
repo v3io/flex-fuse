@@ -2,10 +2,11 @@ RPM_PATH = "iguazio_yum"
 DEB_PATH = "iguazio_deb"
 BINARY_NAME = "igz-fuse"
 RELEASE_VERSION = "0.5.0"
+DOCKER_HUB_USER = "iguaziodocker"
 
 .PHONY: build
 build:
-	docker build --tag iguaziodocker/flex-fuse:unstable .
+	docker build --tag $(DOCKER_HUB_USER)/flex-fuse:unstable .
 
 .PHONY: download
 download:
@@ -15,7 +16,7 @@ download:
 
 .PHONY: release
 release: check-req download build
-	docker tag iguaziodocker/flex-fuse:unstable iguaziodocker/flex-fuse:$(IGUAZIO_VERSION:igz_%=%)-$(RELEASE_VERSION)
+	docker tag $(DOCKER_HUB_USER)/flex-fuse:unstable $(DOCKER_HUB_USER)/flex-fuse:$(IGUAZIO_VERSION:igz_%=%)-$(RELEASE_VERSION)
 
 check-req:
 ifndef MIRROR
