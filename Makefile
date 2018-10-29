@@ -1,7 +1,7 @@
 RPM_PATH = "iguazio_yum"
 DEB_PATH = "iguazio_deb"
 BINARY_NAME = "igz-fuse"
-RELEASE_VERSION = "0.5.0"
+RELEASE_VERSION = "0.5.1"
 DOCKER_HUB_USER = "iguaziodocker"
 
 .PHONY: build
@@ -13,6 +13,7 @@ download:
 	@rm -rf hack/libs/${BINARY_NAME}*
 	@cd hack/libs && wget --quiet $(MIRROR)/$(RPM_PATH)/$(IGUAZIO_VERSION)/$(BINARY_NAME).rpm
 	@cd hack/libs && wget --quiet $(MIRROR)/$(DEB_PATH)/$(IGUAZIO_VERSION)/$(BINARY_NAME).deb
+	@touch hack/libs/$(IGUAZIO_VERSION)
 
 .PHONY: release
 release: check-req download build
