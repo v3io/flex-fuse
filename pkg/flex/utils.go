@@ -43,10 +43,14 @@ func MakeResponse(status, message string) *Response {
 }
 
 func Success(message string) *Response {
+	journal.Info("Success", "message", message)
+
 	return MakeResponse("Success", message)
 }
 
 func Fail(message string, err error) *Response {
+	journal.Warn("Failed", "message", message, "err", err.Error())
+
 	if err != nil {
 		return MakeResponse("Failure", fmt.Sprintf("%s. %s", message, err))
 	}

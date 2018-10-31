@@ -1,7 +1,7 @@
 RPM_PATH = "iguazio_yum"
 DEB_PATH = "iguazio_deb"
 BINARY_NAME = "igz-fuse"
-RELEASE_VERSION = "0.5.1"
+RELEASE_VERSION = "0.5.2"
 DOCKER_HUB_USER = "iguaziodocker"
 
 .PHONY: build

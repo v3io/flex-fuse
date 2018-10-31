@@ -37,7 +37,7 @@ func (m *Mounter) doMount(targetPath string) *Response {
 	}
 	mountCmd := exec.Command(m.Config.FusePath, args...)
 
-	journal.Debug("calling mount command", "path", mountCmd.Path, "args", mountCmd.Args)
+	journal.Debug("Calling mount command", "path", mountCmd.Path, "args", mountCmd.Args)
 	if err := mountCmd.Start(); err != nil {
 		return Fail(fmt.Sprintf("Could not mount: %s", m.Target), err)
 	}
@@ -51,7 +51,7 @@ func (m *Mounter) doMount(targetPath string) *Response {
 }
 
 func (m *Mounter) osMount() *Response {
-	journal.Info("calling osMount command", "target", m.Target)
+	journal.Info("Calling osMount command", "target", m.Target)
 	if isStaleMount(m.Target) {
 		unmountCmd := exec.Command("umount", m.Target)
 		out, err := unmountCmd.CombinedOutput()
@@ -74,11 +74,11 @@ func (m *Mounter) Mount() *Response {
 }
 
 func (m *Mounter) mountAsLink() *Response {
-	journal.Info("calling mountAsLink command", "target", m.Target)
+	journal.Info("Calling mountAsLink command", "target", m.Target)
 	targetPath := path.Join("/mnt/v3io", m.Spec.Namespace, m.Spec.Container)
 	response := &Response{}
 	if !isMountPoint(targetPath) {
-		journal.Debug("creating folder", "target", targetPath)
+		journal.Debug("Creating folder", "target", targetPath)
 		os.MkdirAll(targetPath, 0755)
 		response = m.doMount(targetPath)
 	}
@@ -93,7 +93,7 @@ func (m *Mounter) mountAsLink() *Response {
 }
 
 func (m *Mounter) unmountAsLink() *Response {
-	journal.Info("calling unmountAsLink command", "target", m.Target)
+	journal.Info("Calling unmountAsLink command", "target", m.Target)
 	if err := os.Remove(m.Target); err != nil {
 		return Fail("unable to remove link", err)
 	}
@@ -101,10 +101,10 @@ func (m *Mounter) unmountAsLink() *Response {
 }
 
 func (m *Mounter) osUmount() *Response {
-	journal.Info("calling osUmount command", "target", m.Target)
+	journal.Info("Calling osUmount command", "target", m.Target)
 	if isMountPoint(m.Target) {
 		cmd := exec.Command("umount", m.Target)
-		journal.Debug("calling umount command", "path", cmd.Path, "args", cmd.Args)
+		journal.Debug("Calling umount command", "path", cmd.Path, "args", cmd.Args)
 		if err := cmd.Start(); err != nil {
 			return Fail("could not unmount", err)
 		}
@@ -133,7 +133,7 @@ func NewMounter(target, options string) (*Mounter, error) {
 			return nil, err
 		}
 	}
-	journal.Debug("reading config")
+	journal.Debug("Reading config")
 	config, err := ReadConfig()
 	if err != nil {
 		return nil, err
@@ -164,23 +164,20 @@ func Unmount(target string) *Response {
 }
 
 func Init() *Response {
-	journal.Info("calling init command")
+	journal.Info("Initializing")
 	config, err := ReadConfig()
 	if err != nil {
 		return Fail("Initialization script failed to read config", err)
 	}
-	_, staterr := os.Stat(config.FusePath)
-	if staterr != nil {
-		if os.IsNotExist(staterr) {
-			location := path.Dir(os.Args[0])
-			command := exec.Command("/bin/bash", path.Join(location, "install.sh"))
-			journal.Debug("calling install command", "path", command.Path, "args", command.Args)
-			if err := command.Run(); err != nil {
-				return Fail("Initialization script failed", err)
-			}
-		} else {
-			return Fail("Initialization script failed to get fuse status", staterr)
-		}
+
+	journal.Debug("Preparing to run install", config.FusePath)
+
+	location := path.Dir(os.Args[0])
+	command := exec.Command("/bin/bash", path.Join(location, "install.sh"))
+	
+	journal.Debug("Calling install command", "path", command.Path, "args", command.Args)
+	if err := command.Run(); err != nil {
+		return Fail("Initialization script failed", err)
 	}
 
 	resp := Success("Initialization completed")

@@ -33,8 +33,8 @@ echo "Installing v3io-fuse package"
 echo "$(date) - Installing v3io-fuse package" >> /tmp/init.log
 
 if [ "${HAS_YUM}" == "0" ]; then
-    echo "$(date) - Installing v3io-fuse package using 'rpm -ivh ${LIBS_DIR}/${PACKAGE_NAME}.rpm'" >> /tmp/init.log
-    rpm -ivh ${LIBS_DIR}/${PACKAGE_NAME}.rpm &>> /tmp/init.log
+    echo "$(date) - Installing v3io-fuse package using 'rpm -ivh --force ${LIBS_DIR}/${PACKAGE_NAME}.rpm'" >> /tmp/init.log
+    rpm -ivh --force ${LIBS_DIR}/${PACKAGE_NAME}.rpm &>> /tmp/init.log
 else
     echo "$(date) - Installing v3io-fuse package using 'dpkg -i ${LIBS_DIR}/${PACKAGE_NAME}.deb'" >> /tmp/init.log
     dpkg -i ${LIBS_DIR}/${PACKAGE_NAME}.deb &>> /tmp/init.log

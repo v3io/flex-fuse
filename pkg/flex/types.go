@@ -26,6 +26,7 @@ const (
 )
 
 func ReadConfig() (*Config, error) {
+	journal.Debug("Reading config", "path", v3ioConfig)
 	content, err := ioutil.ReadFile(v3ioConfig)
 	if err != nil {
 		return nil, err
@@ -34,6 +35,7 @@ func ReadConfig() (*Config, error) {
 	if err := json.Unmarshal(content, &config); err != nil {
 		return nil, err
 	}
+	journal.Debug("Config read", "config", string(content))
 	return &config, nil
 }
 
@@ -92,7 +94,7 @@ func (c *Config) Session(cluster, username, password, plane string) (string, err
 		return "", err
 	}
 	payload := strings.NewReader(fmt.Sprintf(v3ioSessionPayloadTemplate, plane, username, password))
-	journal.Debug("creating session", "plane", plane, "url", fmt.Sprintf("%s/api/sessions", clusterConfig.ApiUrl))
+	journal.Debug("Creating session", "plane", plane, "url", fmt.Sprintf("%s/api/sessions", clusterConfig.ApiUrl))
 	response, err := http.Post(
 		fmt.Sprintf("%s/api/sessions", clusterConfig.ApiUrl),
 		"application/json",
@@ -105,7 +107,7 @@ func (c *Config) Session(cluster, username, password, plane string) (string, err
 	if err != nil {
 		return "", err
 	}
-	journal.Debug("result from creating session", "status", response.Status, "body", string(bodyBytes))
+	journal.Debug("Result from creating session", "status", response.Status, "body", string(bodyBytes))
 	if response.StatusCode != 201 {
 		return "", fmt.Errorf("error creating session. %d : %s", response.StatusCode, response.Status)
 	}
@@ -113,7 +115,7 @@ func (c *Config) Session(cluster, username, password, plane string) (string, err
 	if err := json.Unmarshal(bodyBytes, &responseM); err != nil {
 		return "", err
 	}
-	journal.Info("created session id", responseM.Data.Id)
+	journal.Info("Created session id", responseM.Data.Id)
 	return responseM.Data.Id, nil
 }
 
