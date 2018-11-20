@@ -2,6 +2,7 @@ package flex
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/v3io/k8svol/pkg/journal"
 	"os"
@@ -18,11 +19,6 @@ type Mounter struct {
 }
 
 func (m *Mounter) doMount(targetPath string) *Response {
-	session, err := m.Config.DataSession(m.Spec)
-	if err != nil {
-		return Fail("Could not create session", err)
-	}
-
 	dataUrls, err := m.Config.DataURLs(m.Spec.GetClusterName())
 	if err != nil {
 		return Fail("could not get cluster data urls", err)
@@ -31,7 +27,7 @@ func (m *Mounter) doMount(targetPath string) *Response {
 	args := []string{"-o", "allow_other",
 		"--connection_strings", dataUrls,
 		"--mountpoint", targetPath,
-		"--session_key", session}
+		"--session_key", m.Spec.GetAccessKey()}
 	if m.Spec.Container != "" {
 		args = append(args, "-a", m.Spec.Container)
 	}
@@ -67,6 +63,9 @@ func (m *Mounter) osMount() *Response {
 }
 
 func (m *Mounter) Mount() *Response {
+	if err := m.validate(); err != nil {
+		return Fail("Mount failed validation", err)
+	}
 	if m.Config.Type == "link" {
 		return m.mountAsLink()
 	}
@@ -126,6 +125,13 @@ func (m *Mounter) Unmount() *Response {
 	return m.osUmount()
 }
 
+func (m *Mounter) validate() error {
+	if m.Spec.Username == "" || m.Spec.AccessKey == "" {
+		errors.New("missing username or access key")
+	}
+	return nil
+}
+
 func NewMounter(target, options string) (*Mounter, error) {
 	opts := VolumeSpec{}
 	if options != "" {
@@ -174,7 +180,7 @@ func Init() *Response {
 
 	location := path.Dir(os.Args[0])
 	command := exec.Command("/bin/bash", path.Join(location, "install.sh"))
-	
+
 	journal.Debug("Calling install command", "path", command.Path, "args", command.Args)
 	if err := command.Run(); err != nil {
 		return Fail("Initialization script failed", err)
