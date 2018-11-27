@@ -6,7 +6,7 @@ import (
 	"github.com/nuclio/logger"
 )
 
-var j = JournalLogger{}
+var j = Logger{}
 
 func Error(message interface{}, vars ...interface{}) {
 	j.Error(message, vars...)
@@ -24,54 +24,54 @@ func Debug(message interface{}, vars ...interface{}) {
 	j.Debug(message, vars...)
 }
 
-type JournalLogger struct {
+type Logger struct {
 }
 
-func (j *JournalLogger) journal(priority journal.Priority, message interface{}, vars ...interface{}) {
+func (j *Logger) journal(priority journal.Priority, message interface{}, vars ...interface{}) {
 	format := ""
 	if len(vars) > 0 {
 		format = fmt.Sprintf("%s: %s", message, vars)
 	} else {
 		format = fmt.Sprint(message)
 	}
-	journal.Send(format, priority, nil)
+	journal.Send(format, priority, nil) // nolint: errcheck
 }
 
-func (j *JournalLogger) Error(message interface{}, vars ...interface{}) {
+func (j *Logger) Error(message interface{}, vars ...interface{}) {
 	j.journal(journal.PriErr, message, vars...)
 }
 
-func (j *JournalLogger) Warn(message interface{}, vars ...interface{}) {
+func (j *Logger) Warn(message interface{}, vars ...interface{}) {
 	j.journal(journal.PriWarning, message, vars...)
 }
 
-func (j *JournalLogger) Info(message interface{}, vars ...interface{}) {
+func (j *Logger) Info(message interface{}, vars ...interface{}) {
 	j.journal(journal.PriInfo, message, vars...)
 }
 
-func (j *JournalLogger) Debug(message interface{}, vars ...interface{}) {
+func (j *Logger) Debug(message interface{}, vars ...interface{}) {
 	j.journal(journal.PriDebug, message, vars...)
 }
 
-func (j *JournalLogger) ErrorWith(message interface{}, vars ...interface{}) {
+func (j *Logger) ErrorWith(message interface{}, vars ...interface{}) {
 	j.journal(journal.PriErr, message, vars...)
 }
 
-func (j *JournalLogger) WarnWith(message interface{}, vars ...interface{}) {
+func (j *Logger) WarnWith(message interface{}, vars ...interface{}) {
 	j.journal(journal.PriWarning, message, vars...)
 }
 
-func (j *JournalLogger) InfoWith(message interface{}, vars ...interface{}) {
+func (j *Logger) InfoWith(message interface{}, vars ...interface{}) {
 	j.journal(journal.PriInfo, message, vars...)
 }
 
-func (j *JournalLogger) DebugWith(message interface{}, vars ...interface{}) {
+func (j *Logger) DebugWith(message interface{}, vars ...interface{}) {
 	j.journal(journal.PriDebug, message, vars...)
 }
 
-func (j *JournalLogger) Flush() {
+func (j *Logger) Flush() {
 }
 
-func (j *JournalLogger) GetChild(name string) logger.Logger {
+func (j *Logger) GetChild(name string) logger.Logger {
 	return j
 }

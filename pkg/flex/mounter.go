@@ -78,7 +78,9 @@ func (m *Mounter) mountAsLink() *Response {
 	response := &Response{}
 	if !isMountPoint(targetPath) {
 		journal.Debug("Creating folder", "target", targetPath)
-		os.MkdirAll(targetPath, 0755)
+		if err := os.MkdirAll(targetPath, 0755); err != nil {
+			return Fail(fmt.Sprintf("unable to create target %s", targetPath), err)
+		}
 		response = m.doMount(targetPath)
 	}
 
@@ -87,7 +89,9 @@ func (m *Mounter) mountAsLink() *Response {
 		return Fail(fmt.Sprintf("unable to remove target %s", m.Target), err)
 	}
 
-	os.Symlink(targetPath, m.Target)
+	if err := os.Symlink(targetPath, m.Target); err != nil {
+		return Fail(fmt.Sprintf("unable to create link %s to target %s", targetPath, m.Target), err)
+	}
 	return response
 }
 
@@ -127,7 +131,7 @@ func (m *Mounter) Unmount() *Response {
 
 func (m *Mounter) validate() error {
 	if m.Spec.Username == "" || m.Spec.AccessKey == "" {
-		errors.New("missing username or access key")
+		return errors.New("missing username or access key")
 	}
 	return nil
 }
@@ -155,18 +159,16 @@ func Mount(target, options string) *Response {
 	mounter, err := NewMounter(target, options)
 	if err != nil {
 		return Fail("unable to create mounter", err)
-	} else {
-		return mounter.Mount()
 	}
+	return mounter.Mount()
 }
 
 func Unmount(target string) *Response {
 	mounter, err := NewMounter(target, "")
 	if err != nil {
 		return Fail("unable to create mounter", err)
-	} else {
-		return mounter.Unmount()
 	}
+	return mounter.Unmount()
 }
 
 func Init() *Response {
