@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/v3io/k8svol/pkg/flex"
-	"github.com/v3io/k8svol/pkg/journal"
+	"github.com/v3io/flex-fuse/pkg/flex"
+	"github.com/v3io/flex-fuse/pkg/journal"
 )
 
 func main() {
