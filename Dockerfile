@@ -1,7 +1,7 @@
 FROM golang:1.10.3 as builder
 
 ENV GOPATH=/go
-ENV PROJECT_PATH=${GOPATH}/src/github.com/v3io/k8svol
+ENV PROJECT_PATH=${GOPATH}/src/github.com/v3io/flex-fuse
 
 COPY cmd ${PROJECT_PATH}/cmd
 COPY pkg ${PROJECT_PATH}/pkg

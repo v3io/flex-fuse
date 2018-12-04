@@ -2,9 +2,10 @@ package flex
 
 import (
 	"fmt"
-	"github.com/v3io/k8svol/pkg/journal"
 	"os/exec"
 	"syscall"
+
+	"github.com/v3io/flex-fuse/pkg/journal"
 )
 
 func isStaleMount(path string) bool {
