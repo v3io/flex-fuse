@@ -9,7 +9,7 @@ addons:
       - docker-ce
 
 language: go
-go_import_path: github.com/v3io/k8svol
+go_import_path: github.com/v3io/flex-fuse
 go: "1.10"
 
 script:

@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/v3io/k8svol/pkg/journal"
 	"os"
 	"os/exec"
 	"path"
 	"time"
+
+	"github.com/v3io/flex-fuse/pkg/journal"
 )
 
 type Mounter struct {

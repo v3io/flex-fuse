@@ -4,9 +4,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/v3io/k8svol/pkg/journal"
 	"io/ioutil"
 	"strings"
+
+	"github.com/v3io/flex-fuse/pkg/journal"
 )
 
 const (

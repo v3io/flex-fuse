@@ -1,4 +1,4 @@
-# k8vol
+# Flex Fuse
 Kubernetes FlexVolume Driver for iguazio Data Platform (v3io fuse) 
 
 This driver allow accessing iguazio data containers (or a sub-path) as a shared volume storage for Kubernetes.

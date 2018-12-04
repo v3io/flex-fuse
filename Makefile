@@ -4,7 +4,7 @@ BINARY_NAME = "igz-fuse"
 RELEASE_VERSION = "0.6.1"
 DOCKER_HUB_USER = "iguaziodocker"
 QUAY_IO_USER = "quay.io/iguazio"
-FULL_VERSION = $(IGUAZIO_VERSION:igz_%=%)-$(RELEASE_VERSION)
+FULL_VERSION = $(RELEASE_VERSION)-$(IGUAZIO_VERSION:igz_%=%)
 
 .PHONY: build
 build: lint vet
