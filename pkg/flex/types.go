@@ -74,11 +74,7 @@ func (c *Config) DataURLs(cluster string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	result := make([]string, len(clusterConfig.DataUrls), len(clusterConfig.DataUrls))
-	for index, item := range clusterConfig.DataUrls {
-		result[index] = item
-	}
-	return strings.Join(result, ","), nil
+	return strings.Join(clusterConfig.DataUrls, ","), nil
 }
 
 func (c *Config) ControlSession(spec *VolumeSpec) (string, error) {
@@ -133,7 +129,7 @@ func (r *Response) String() string {
 	return fmt.Sprintf("Response[Status=%s, Message=%s]", r.Status, r.Message)
 }
 
-func (r *Response) ToJson() {
+func (r *Response) ToJSON() {
 	jsonBytes, err := json.Marshal(r)
 	if err != nil {
 		fmt.Printf(`{"status": "Failure", "Message": "%s"}`, err)
