@@ -31,6 +31,9 @@ func (m *Mounter) doMount(targetPath string) *Response {
 		"--session_key", m.Spec.GetAccessKey()}
 	if m.Spec.Container != "" {
 		args = append(args, "-a", m.Spec.Container)
+		if m.Spec.SubPath != "" {
+			args = append(args, "-p", m.Spec.SubPath)
+		}
 	}
 	mountCmd := exec.Command(m.Config.FusePath, args...)
 
@@ -131,8 +134,11 @@ func (m *Mounter) Unmount() *Response {
 }
 
 func (m *Mounter) validate() error {
-	if m.Spec.Username == "" || m.Spec.AccessKey == "" {
-		return errors.New("missing username or access key")
+	if m.Spec.AccessKey == "" {
+		return errors.New("required access key is missing")
+	}
+	if m.Spec.SubPath != "" && m.Spec.Container == "" {
+		return errors.New("can't have subpath without container value")
 	}
 	return nil
 }

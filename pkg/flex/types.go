@@ -84,10 +84,7 @@ type VolumeSpec struct {
 	SubPath   string `json:"subPath"`
 	Container string `json:"container"`
 	Cluster   string `json:"cluster"`
-	Username  string `json:"kubernetes.io/secret/username"`
-	Password  string `json:"kubernetes.io/secret/password"`
 	AccessKey string `json:"kubernetes.io/secret/accessKey"`
-	Tenant    string `json:"kubernetes.io/secret/tenant"`
 	PodName   string `json:"kubernetes.io/pod.name"`
 	Namespace string `json:"kubernetes.io/pod.namespace"`
 	Name      string `json:"kubernetes.io/pvOrVolumeName"`
@@ -101,27 +98,8 @@ func (VolumeSpec) decodeOrDefault(value string) string {
 	return string(bytes)
 }
 
-func (vs *VolumeSpec) GetUsername() string {
-	return vs.decodeOrDefault(vs.Username)
-}
-
-func (vs *VolumeSpec) GetTenant() string {
-	return vs.decodeOrDefault(vs.Tenant)
-}
-
-func (vs *VolumeSpec) GetPassword() string {
-	return vs.decodeOrDefault(vs.Password)
-}
-
 func (vs *VolumeSpec) GetAccessKey() string {
 	return vs.decodeOrDefault(vs.AccessKey)
-}
-
-func (vs *VolumeSpec) GetFullUsername() string {
-	if vs.Tenant != "" {
-		return fmt.Sprintf("%s@%s", vs.GetUsername(), vs.GetTenant())
-	}
-	return vs.GetUsername()
 }
 
 func (vs *VolumeSpec) GetClusterName() string {
