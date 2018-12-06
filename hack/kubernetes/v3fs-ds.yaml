@@ -64,6 +64,4 @@ metadata:
   name: v3io-user-fuse
 type: v3io/fuse
 data:
-  username: aWd1YXppbw==
-  #tenant: aWd1YXppbw==
   accessKey: YThhNHl6dlBMb2g2UU5JcQ==
