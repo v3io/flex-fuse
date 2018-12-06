@@ -134,8 +134,8 @@ func (m *Mounter) Unmount() *Response {
 }
 
 func (m *Mounter) validate() error {
-	if m.Spec.AccessKey == "" {
-		return errors.New("required access key is missing")
+	if m.Spec.Username == "" || m.Spec.Password == "" {
+		return errors.New("required username or password is missing")
 	}
 	if m.Spec.SubPath != "" && m.Spec.Container == "" {
 		return errors.New("can't have subpath without container value")
