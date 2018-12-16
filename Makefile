@@ -1,14 +1,11 @@
 RPM_PATH = "iguazio_yum"
 DEB_PATH = "iguazio_deb"
 BINARY_NAME = "igz-fuse"
-RELEASE_VERSION = "0.6.2"
-DOCKER_HUB_USER = "iguaziodocker"
-QUAY_IO_USER = "quay.io/iguazio"
-FULL_VERSION = $(RELEASE_VERSION)-$(IGUAZIO_VERSION:igz_%=%)
+VERSION = $(IGUAZIO_VERSION:igz_%=%)
 
 .PHONY: build
 build:
-	docker build --tag $(DOCKER_HUB_USER)/flex-fuse:unstable .
+	docker build --tag flex-fuse:unstable .
 
 .PHONY: download
 download:
@@ -19,20 +16,7 @@ download:
 
 .PHONY: release
 release: check-req download build
-	docker tag $(DOCKER_HUB_USER)/flex-fuse:unstable $(DOCKER_HUB_USER)/flex-fuse:$(FULL_VERSION)
-	docker tag $(DOCKER_HUB_USER)/flex-fuse:unstable $(QUAY_IO_USER)/flex-fuse:$(FULL_VERSION)
-	echo $(FULL_VERSION) > VERSION
-
-check-req:
-ifndef MIRROR
-	$(error MIRROR must be set)
-endif
-ifndef IGUAZIO_VERSION
-	$(error IGUAZIO_VERSION must be set)
-endif
-ifndef RELEASE_VERSION
-	$(error RELEASE_VERSION must be set)
-endif
+	docker tag flex-fuse:unstable flex-fuse:$(VERSION)
 
 .PHONY: lint
 lint: ensure-gopath
@@ -77,8 +61,16 @@ test:
 	go test -v ./cmd/...
 	go test -v ./pkg/...
 
-.PHONY: ensure-gopath
-check-gopath:
+
+check-req:
+ifndef MIRROR
+	$(error MIRROR must be set)
+endif
+ifndef IGUAZIO_VERSION
+	$(error IGUAZIO_VERSION must be set)
+endif
+
+ensure-gopath:
 ifndef GOPATH
-    $(error GOPATH must be set)
+	$(error GOPATH must be set)
 endif
