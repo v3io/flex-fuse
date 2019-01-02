@@ -51,8 +51,7 @@ data:
       "clusters": [
           {
                 "name": "default",
-                "data_url": "tcp://172.31.32.50:1234",
-                "api_url": "http://172.31.32.50:8001"
+                "data_urls": ["tcp://172.31.32.50:1234"]
           }
       ]
     }
@@ -65,6 +64,4 @@ metadata:
   name: v3io-user-fuse
 type: v3io/fuse
 data:
-  username: aWd1YXppbw==
-  #tenant: aWd1YXppbw==
-  password: YThhNHl6dlBMb2g2UU5JcQ==
+  accessKey: YThhNHl6dlBMb2g2UU5JcQ==

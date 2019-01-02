@@ -20,11 +20,6 @@ type Mounter struct {
 }
 
 func (m *Mounter) doMount(targetPath string) *Response {
-	session, err := m.Config.DataSession(m.Spec)
-	if err != nil {
-		return Fail("Could not create session", err)
-	}
-
 	dataUrls, err := m.Config.DataURLs(m.Spec.GetClusterName())
 	if err != nil {
 		return Fail("could not get cluster data urls", err)
@@ -33,7 +28,7 @@ func (m *Mounter) doMount(targetPath string) *Response {
 	args := []string{"-o", "allow_other",
 		"--connection_strings", dataUrls,
 		"--mountpoint", targetPath,
-		"--session_key", session}
+		"--session_key", m.Spec.GetAccessKey()}
 	if m.Spec.Container != "" {
 		args = append(args, "-a", m.Spec.Container)
 		if m.Spec.SubPath != "" {
@@ -139,8 +134,8 @@ func (m *Mounter) Unmount() *Response {
 }
 
 func (m *Mounter) validate() error {
-	if m.Spec.Username == "" || m.Spec.Password == "" {
-		return errors.New("required username or password is missing")
+	if m.Spec.AccessKey == "" {
+		return errors.New("required access key is missing")
 	}
 	if m.Spec.SubPath != "" && m.Spec.Container == "" {
 		return errors.New("can't have subpath without container value")
