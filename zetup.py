@@ -137,7 +137,6 @@ def task_push_images(project, repository, tag, pushed_images_file_path):
                          remote_docker_image_name=remote_docker_image_name,
                          docker_image_name=docker_image_name)
 
-    project.logger.debug('Push images task is done')
     pushed_images = simplejson.dumps([{
         'target_image_name': remote_docker_image_name,
         'image_name': docker_image_name
