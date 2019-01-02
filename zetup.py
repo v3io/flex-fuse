@@ -80,7 +80,7 @@ def task_build_images(project, version, mirror):
     Internal build function
     """
 
-    project.logger.debug('Building', version=version, mirror=mirror)
+    project.logger.info('Building', version=version, mirror=mirror)
 
     cwd = project.config['flex-fuse']['flex_fuse_path']
     cmd = 'make release MIRROR={0} IGUAZIO_VERSION={1}'.format(mirror, version)
@@ -89,7 +89,7 @@ def task_build_images(project, version, mirror):
 
     out, _, _ = yield ziggy.shell.run(project.ctx, cmd, cwd=cwd)
 
-    project.logger.debug('Build images task is done', out=out)
+    project.logger.info('Build images task is done', out=out)
 
 
 @defer.inlineCallbacks
@@ -98,26 +98,28 @@ def task_push_images(project, repository, tag, pushed_images_file_path):
     Internal publish function
     """
 
-    project.logger.debug('Pushing images',
-                         repository=repository,
-                         tag=tag,
-                         pushed_images_file_path=pushed_images_file_path)
+    project.logger.info('Pushing images',
+                        repository=repository,
+                        tag=tag,
+                        pushed_images_file_path=pushed_images_file_path)
 
     cwd = project.config['flex-fuse']['flex_fuse_path']
 
-    version_path = os.path.join(cwd, 'VERSION')
-    project.logger.debug('Collecting output version', version_path=version_path)
-    image_tag = ziggy.fs.read_file_contents(project.ctx, version_path).strip()
+    repository = repository.replace(tag, '').rstrip('/')
 
-    docker_image_name = 'flex-fuse:{0}'.format(image_tag)
-    remote_docker_image_name = '{0}/{1}'.format(repository, docker_image_name)
+    repository_user = os.path.join('k8s_apps', tag)
+    if tag.startswith('igz_'):
+        tag = tag.partition('_')[-1]
+
+    docker_image_name = 'flex-fuse:{0}'.format(tag)
+    remote_docker_image_name = '{0}/{1}/{2}'.format(repository, repository_user, docker_image_name)
     cmd = 'docker tag {0} {1}'.format(docker_image_name, remote_docker_image_name)
 
     # Tag
     project.logger.debug('Tagging docker image before push',
                          cwd=cwd,
                          cmd=cmd,
-                         image_tag=image_tag,
+                         tag=tag,
                          docker_image_name=docker_image_name,
                          remote_docker_image_name=remote_docker_image_name)
     yield ziggy.shell.run(project.ctx, cmd, cwd=cwd)
@@ -135,13 +137,15 @@ def task_push_images(project, repository, tag, pushed_images_file_path):
                          remote_docker_image_name=remote_docker_image_name,
                          docker_image_name=docker_image_name)
 
-    pushed_image = {
+    project.logger.debug('Push images task is done')
+    pushed_images = simplejson.dumps([{
         'target_image_name': remote_docker_image_name,
         'image_name': docker_image_name
-    }
-    ziggy.fs.write_file_contents(project.ctx, pushed_images_file_path, simplejson.dumps([pushed_image]))
+    }], indent=4)
 
-    project.logger.debug('Push images task is done')
+    ziggy.fs.write_file_contents(project.ctx, pushed_images_file_path, pushed_images)
+
+    project.logger.info('Push images task is done', pushed_images=pushed_images)
 
 
 @defer.inlineCallbacks

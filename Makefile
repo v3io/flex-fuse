@@ -19,9 +19,7 @@ download:
 
 .PHONY: release
 release: check-req download build
-	docker tag $(DOCKER_HUB_USER)/flex-fuse:unstable $(DOCKER_HUB_USER)/flex-fuse:$(FULL_VERSION)
-	docker tag $(DOCKER_HUB_USER)/flex-fuse:unstable $(QUAY_IO_USER)/flex-fuse:$(FULL_VERSION)
-	echo $(FULL_VERSION) > VERSION
+	docker tag $(DOCKER_HUB_USER)/flex-fuse:unstable $(DOCKER_HUB_USER)/flex-fuse:$(IGUAZIO_VERSION:igz_%=%)-$(RELEASE_VERSION)
 
 check-req:
 ifndef MIRROR
@@ -33,6 +31,12 @@ endif
 ifndef RELEASE_VERSION
 	$(error RELEASE_VERSION must be set)
 endif
+
+ensure-gopath:
+ifndef GOPATH
+	$(error GOPATH must be set)
+endif
+
 
 .PHONY: lint
 lint: ensure-gopath
