@@ -108,8 +108,6 @@ def task_push_images(project, repository, tag, pushed_images_file_path):
     repository = repository.replace(tag, '').rstrip('/')
 
     repository_user = os.path.join('k8s_apps', tag)
-    if tag.startswith('igz_'):
-        tag = tag.partition('_')[-1]
 
     docker_image_name = 'flex-fuse:{0}'.format(tag)
     remote_docker_image_name = '{0}/{1}/{2}'.format(repository, repository_user, docker_image_name)

@@ -1,7 +1,7 @@
 RPM_PATH = "iguazio_yum"
 DEB_PATH = "iguazio_deb"
 BINARY_NAME = "igz-fuse"
-VERSION = $(IGUAZIO_VERSION:igz_%=%)
+VERSION = $(IGUAZIO_VERSION)
 
 .PHONY: build
 build:
