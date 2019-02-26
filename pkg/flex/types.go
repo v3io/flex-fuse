@@ -81,13 +81,14 @@ func (r *Response) ToJSON() {
 }
 
 type VolumeSpec struct {
-	SubPath   string `json:"subPath"`
-	Container string `json:"container"`
-	Cluster   string `json:"cluster"`
-	AccessKey string `json:"kubernetes.io/secret/accessKey"`
-	PodName   string `json:"kubernetes.io/pod.name"`
-	Namespace string `json:"kubernetes.io/pod.namespace"`
-	Name      string `json:"kubernetes.io/pvOrVolumeName"`
+	SubPath           string `json:"subPath"`
+	Container         string `json:"container"`
+	Cluster           string `json:"cluster"`
+	OverrideAccessKey string `json:"accessKey"`
+	AccessKey         string `json:"kubernetes.io/secret/accessKey"`
+	PodName           string `json:"kubernetes.io/pod.name"`
+	Namespace         string `json:"kubernetes.io/pod.namespace"`
+	Name              string `json:"kubernetes.io/pvOrVolumeName"`
 }
 
 func (VolumeSpec) decodeOrDefault(value string) string {
@@ -99,7 +100,10 @@ func (VolumeSpec) decodeOrDefault(value string) string {
 }
 
 func (vs *VolumeSpec) GetAccessKey() string {
-	return vs.decodeOrDefault(vs.AccessKey)
+	if vs.OverrideAccessKey == "" {
+		return vs.decodeOrDefault(vs.AccessKey)
+	}
+	return vs.OverrideAccessKey
 }
 
 func (vs *VolumeSpec) GetClusterName() string {

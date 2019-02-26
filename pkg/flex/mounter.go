@@ -134,7 +134,7 @@ func (m *Mounter) Unmount() *Response {
 }
 
 func (m *Mounter) validate() error {
-	if m.Spec.AccessKey == "" {
+	if m.Spec.AccessKey == "" && m.Spec.OverrideAccessKey == "" {
 		return errors.New("required access key is missing")
 	}
 	if m.Spec.SubPath != "" && m.Spec.Container == "" {
