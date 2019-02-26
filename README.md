@@ -48,6 +48,7 @@ spec:
       options:
         container: bigdata      # data container name
         cluster: default        # which cluster to connect to (optional, default to "default")
+        accessKey: some-some    # data access key (optional)
 ---
 apiVersion: v1
 kind: Secret
