@@ -41,7 +41,7 @@ func (m *Mounter) doMount(targetPath string) *Response {
 	if err := mountCmd.Start(); err != nil {
 		return Fail(fmt.Sprintf("Could not mount: %s", m.Target), err)
 	}
-	for _, interval := range []time.Duration{1, 2, 4} {
+	for _, interval := range []time.Duration{1, 2, 4, 2, 1} {
 		if isMountPoint(targetPath) {
 			return Success("Mount completed!")
 		}
@@ -110,16 +110,22 @@ func (m *Mounter) unmountAsLink() *Response {
 func (m *Mounter) osUmount() *Response {
 	journal.Info("Calling osUmount command", "target", m.Target)
 	if isMountPoint(m.Target) {
-		cmd := exec.Command("umount", m.Target)
-		journal.Debug("Calling umount command", "path", cmd.Path, "args", cmd.Args)
-		if err := cmd.Start(); err != nil {
-			return Fail("could not unmount", err)
+		args := [][]string{
+			{m.Target},
+			{"--force", m.Target},
 		}
-		for _, interval := range []time.Duration{1, 2, 4} {
-			if !isMountPoint(m.Target) {
-				return Success("Unmount completed!")
+		for _, commandArgs := range args {
+			cmd := exec.Command("umount", commandArgs...)
+			journal.Debug("Calling umount command", "path", cmd.Path, "args", cmd.Args)
+			if err := cmd.Start(); err != nil {
+				return Fail("could not unmount", err)
 			}
-			time.Sleep(interval * time.Second)
+			for _, interval := range []time.Duration{1, 2, 4, 2, 1} {
+				if !isMountPoint(m.Target) {
+					return Success("Unmount completed!")
+				}
+				time.Sleep(interval * time.Second)
+			}
 		}
 		return Fail(fmt.Sprintf("Could not umount due to timeout: %s", m.Target), nil)
 	}
