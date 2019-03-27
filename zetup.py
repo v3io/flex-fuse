@@ -8,6 +8,7 @@ from twisted.internet import defer
 
 import ziggy.utils
 import ziggy.fs
+import ziggy.docker
 import ziggy.tasks
 import ziggy.shell
 
