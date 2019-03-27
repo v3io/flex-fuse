@@ -2,6 +2,7 @@
 
 import os
 import simplejson
+import tempfile
 
 from twisted.internet import defer
 
@@ -142,6 +143,65 @@ def task_push_images(project, repository, tag, pushed_images_file_path):
     ziggy.fs.write_file_contents(project.ctx, pushed_images_file_path, pushed_images)
 
     project.logger.info('Push images task is done', pushed_images=pushed_images)
+
+
+@defer.inlineCallbacks
+def task_project_build(project, output_dir, tag=None, nas_deployed_artifacts_path='/mnt/nas'):
+    project.ctx.info('Building', output_dir=output_dir, tag=tag)
+    tasks_to_run = [
+        {
+            'name': 'build_images',
+            'args': {
+                'version': tag,
+                'nas_deployed_artifacts_path': nas_deployed_artifacts_path,
+            },
+        },
+        {
+            'name': 'save_images',
+            'args': {
+                'output_filepath': os.path.join(output_dir, 'flex-fuse-docker-images.tar.gz'),
+                'images': ['flex-fuse:{}'.format(tag)],
+            },
+        },
+    ]
+
+    yield project.task_manager.run_tasks(project, tasks_to_run)
+    project.ctx.info('Finished building',
+                     output_dir=output_dir,
+                     tag=tag,
+                     nas_deployed_artifacts_path=nas_deployed_artifacts_path)
+
+
+@defer.inlineCallbacks
+def task_save_images(project, images, output_filepath=None):
+    if not output_filepath:
+        output_filepath = tempfile.mktemp(suffix='.tar.gz', prefix='flex-fuse-docker-')
+        project.logger.debug('no output filepath was given, using a temporary file',
+                             output_filepath=output_filepath)
+
+    project.logger.debug('Saving docker images', images=images)
+    yield ziggy.docker.save_images(project.ctx, images, output_filepath, compress=True)
+    project.logger.debug('Done saving docker images', output_filepath=output_filepath)
+
+
+@defer.inlineCallbacks
+def task_upload(project, upload_manifest_filepath, output_dir):
+    project.ctx.info('Uploading',
+                     upload_manifest_filepath=upload_manifest_filepath,
+                     output_dir=output_dir)
+
+    upload_links_content = ziggy.fs.read_file_contents(project.ctx, upload_manifest_filepath)
+    upload_links = simplejson.loads(upload_links_content)
+
+    # we will sync\upload out working dir to each links destination
+    for link in upload_links:
+        link['src'] = output_dir
+
+    yield ziggy.tasks.upload(project, links=upload_links)
+
+    project.ctx.info('Done uploading',
+                     upload_links=upload_links,
+                     output_dir=output_dir)
 
 
 @defer.inlineCallbacks
