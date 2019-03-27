@@ -1,7 +1,5 @@
-RPM_PATH = "iguazio_yum"
-DEB_PATH = "iguazio_deb"
-BINARY_NAME = "igz-fuse"
-VERSION = $(IGUAZIO_VERSION)
+BINARY_NAME = "fuse"
+VERSION = $(IGUAZIO_VERSION:igz_%=%)
 
 .PHONY: build
 build:
@@ -10,8 +8,8 @@ build:
 .PHONY: download
 download:
 	@rm -rf hack/libs/${BINARY_NAME}*
-	@cd hack/libs && wget --quiet $(MIRROR)/$(RPM_PATH)/$(IGUAZIO_VERSION)/$(BINARY_NAME).rpm
-	@cd hack/libs && wget --quiet $(MIRROR)/$(DEB_PATH)/$(IGUAZIO_VERSION)/$(BINARY_NAME).deb
+	@cp $(MIRROR)/$(BINARY_NAME).rpm hack/libs
+	@cp $(MIRROR)/$(BINARY_NAME).deb hack/libs
 	@touch hack/libs/$(IGUAZIO_VERSION)
 
 .PHONY: release

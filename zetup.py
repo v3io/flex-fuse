@@ -75,20 +75,19 @@ def task_verify_zetup_unchanged(project):
 
 
 @defer.inlineCallbacks
-def task_build_images(project, version, mirror):
+def task_build_images(project, version, nas_deployed_artifacts_path):
     """
     Internal build function
     """
 
-    project.logger.info('Building', version=version, mirror=mirror)
+    project.logger.info('Building', version=version, nas_deployed_artifacts_path=nas_deployed_artifacts_path)
 
-    cwd = project.config['flex-fuse']['flex_fuse_path']
+    mirror = os.path.join(nas_deployed_artifacts_path, 'engine/zeek-packages')
     cmd = 'make release MIRROR={0} IGUAZIO_VERSION={1}'.format(mirror, version)
 
+    cwd = project.config['flex-fuse']['flex_fuse_path']
     project.logger.debug('Building a release candidate', cwd=cwd, cmd=cmd)
-
     out, _, _ = yield ziggy.shell.run(project.ctx, cmd, cwd=cwd)
-
     project.logger.info('Build images task is done', out=out)
 
 
