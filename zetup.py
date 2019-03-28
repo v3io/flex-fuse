@@ -77,19 +77,33 @@ def task_verify_zetup_unchanged(project):
 
 
 @defer.inlineCallbacks
-def task_build_images(project, version, nas_deployed_artifacts_path):
+def task_build_images(project, version, mirror=None, nas_deployed_artifacts_path='/mnt/nas'):
     """
     Internal build function
     """
 
-    project.logger.info('Building', version=version, nas_deployed_artifacts_path=nas_deployed_artifacts_path)
-
-    mirror = os.path.join(nas_deployed_artifacts_path, 'engine/zeek-packages')
-    cmd = 'make release MIRROR={0} IGUAZIO_VERSION={1}'.format(mirror, version)
+    project.logger.info('Building',
+                        version=version,
+                        mirror=mirror,
+                        nas_deployed_artifacts_path=nas_deployed_artifacts_path)
 
     cwd = project.config['flex-fuse']['flex_fuse_path']
-    project.logger.debug('Building a release candidate', cwd=cwd, cmd=cmd)
-    out, _, _ = yield ziggy.shell.run(project.ctx, cmd, cwd=cwd)
+    cmd = 'make release'
+
+    env = os.environ.copy()
+    env['FETCH_METHOD'] = 'download'
+    env['MIRROR'] = mirror
+    env['IGUAZIO_VERSION'] = version
+    env['SRC_BINARY_NAME'] = 'igz-fuse'
+    env['DST_BINARY_NAME'] = 'igz-fuse'
+
+    if not mirror:
+        env['FETCH_METHOD'] = 'copy'
+        env['SRC_BINARY_NAME'] = 'fuse'
+        env['MIRROR'] = os.path.join(nas_deployed_artifacts_path, 'engine/zeek-packages')
+
+    project.logger.debug('Building a release candidate', cwd=cwd, cmd=cmd, env=env)
+    out, _, _ = yield ziggy.shell.run(project.ctx, 'make release', cwd=cwd, env=env)
     project.logger.info('Build images task is done', out=out)
 
 

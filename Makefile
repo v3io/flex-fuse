@@ -1,5 +1,11 @@
-BINARY_NAME = "fuse"
-VERSION = $(IGUAZIO_VERSION:igz_%=%)
+SRC_BINARY_NAME ?= "igz-fuse"
+DST_BINARY_NAME ?= "igz-fuse"
+FETCH_METHOD ?= "download"
+MIRROR ?=
+IGUAZIO_VERSION ?=
+
+RPM_PATH = "iguazio_yum"
+DEB_PATH = "iguazio_deb"
 
 .PHONY: build
 build:
@@ -7,14 +13,22 @@ build:
 
 .PHONY: download
 download:
-	@rm -rf hack/libs/${BINARY_NAME}*
-	@cp $(MIRROR)/$(BINARY_NAME).rpm hack/libs
-	@cp $(MIRROR)/$(BINARY_NAME).deb hack/libs
+	rm -rf hack/libs/${DST_BINARY_NAME}*
+	echo $(MIRROR)/$(RPM_PATH)/$(IGUAZIO_VERSION)/$(SRC_BINARY_NAME).rpm
+	wget $(MIRROR)/$(RPM_PATH)/$(IGUAZIO_VERSION)/$(SRC_BINARY_NAME).rpm -O hack/libs/$(DST_BINARY_NAME).rpm
+	wget $(MIRROR)/$(DEB_PATH)/$(IGUAZIO_VERSION)/$(SRC_BINARY_NAME).deb -O hack/libs/$(DST_BINARY_NAME).deb
+	touch hack/libs/$(IGUAZIO_VERSION)
+
+.PHONY: copy
+copy:
+	@rm -rf hack/libs/${DST_BINARY_NAME}*
+	@cp $(MIRROR)/$(SRC_BINARY_NAME).rpm hack/libs/$(DST_BINARY_NAME).rpm
+	@cp $(MIRROR)/$(SRC_BINARY_NAME).deb hack/libs/$(DST_BINARY_NAME).deb
 	@touch hack/libs/$(IGUAZIO_VERSION)
 
 .PHONY: release
-release: check-req download build
-	docker tag flex-fuse:unstable flex-fuse:$(VERSION)
+release: check-req $(FETCH_METHOD) build
+	docker tag flex-fuse:unstable flex-fuse:$(IGUAZIO_VERSION)
 
 .PHONY: lint
 lint: ensure-gopath
