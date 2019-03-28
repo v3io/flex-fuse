@@ -27,7 +27,6 @@ builder.set_job_properties([
     string(defaultValue: 'short', description: '', name: 'workflow'),
 
     booleanParam(defaultValue: false, description: '', name: 'publish_to_public_registries'),
-    booleanParam(defaultValue: false, description: '', name: 's3_upload'),
 ])
 
 
@@ -49,5 +48,5 @@ common.notify_slack {
                     ]
 
     k8s.build_flex_fuse(params.build_version, JsonOutput.toJson(snapshot), params.workflow,
-                        params.publish_to_public_registries, params.s3_upload)
+                        params.publish_to_public_registries)
 }
