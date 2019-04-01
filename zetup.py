@@ -99,7 +99,6 @@ def task_build_images(project, version, mirror=None, nas_deployed_artifacts_path
 
     if not mirror:
         env['FETCH_METHOD'] = 'copy'
-        env['SRC_BINARY_NAME'] = 'fuse'
         env['MIRROR'] = os.path.join(nas_deployed_artifacts_path, 'engine/zeek-packages')
 
     project.logger.debug('Building a release candidate', cwd=cwd, cmd=cmd, env=env)
