@@ -163,7 +163,8 @@ def task_push_images(project, repository, tag, pushed_images_file_path):
 def task_project_build(project, output_dir='flex_fuse_resources', tag='igz',
                        mirror=None, nas_deployed_artifacts_path='/mnt/nas'):
     project.ctx.info('Building', output_dir=output_dir, tag=tag)
-    yield ziggy.fs.mkdir(project.ctx, output_dir, force=True)
+    save_images_dir = os.path.join(output_dir, 'k8s_apps')
+    yield ziggy.fs.mkdir(project.ctx, save_images_dir, force=True)
     tasks_to_run = [
         {
             'name': 'build_images',
@@ -176,7 +177,7 @@ def task_project_build(project, output_dir='flex_fuse_resources', tag='igz',
         {
             'name': 'save_images',
             'args': {
-                'output_filepath': os.path.join(output_dir, 'k8s_apps', 'flex-fuse-docker-images.tar.gz'),
+                'output_filepath': os.path.join(save_images_dir, 'flex-fuse-docker-images.tar.gz'),
                 'images': ['flex-fuse:{}'.format(tag)],
             },
         },
