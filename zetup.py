@@ -160,7 +160,8 @@ def task_push_images(project, repository, tag, pushed_images_file_path):
 
 
 @defer.inlineCallbacks
-def task_project_build(project, output_dir, tag=None, nas_deployed_artifacts_path='/mnt/nas'):
+def task_project_build(project, output_dir='flex_fuse_resources', tag='igz',
+                       mirror=None, nas_deployed_artifacts_path='/mnt/nas'):
     project.ctx.info('Building', output_dir=output_dir, tag=tag)
     tasks_to_run = [
         {
@@ -168,6 +169,7 @@ def task_project_build(project, output_dir, tag=None, nas_deployed_artifacts_pat
             'args': {
                 'version': tag,
                 'nas_deployed_artifacts_path': nas_deployed_artifacts_path,
+                'mirror': mirror,
             },
         },
         {
