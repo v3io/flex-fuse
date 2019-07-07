@@ -178,7 +178,7 @@ def task_project_build(project, output_dir='flex_fuse_resources', tag='igz',
             'name': 'save_images',
             'args': {
                 'output_filepath': os.path.join(save_images_dir, 'flex-fuse-docker-images.tar.gz'),
-                'images': ['flex-fuse:{}'.format(tag)],
+                'images': ['iguazio/flex-fuse:{}'.format(tag)],
             },
         },
     ]
