@@ -27,7 +27,7 @@ copy:
 
 .PHONY: release
 release: check-req $(FETCH_METHOD) build
-	docker tag flex-fuse:unstable flex-fuse:$(IGUAZIO_VERSION)
+	docker tag flex-fuse:unstable iguazio/flex-fuse:$(IGUAZIO_VERSION)
 
 .PHONY: lint
 lint: ensure-gopath
