@@ -13,17 +13,17 @@ build:
 
 .PHONY: download
 download:
-	@rm -rf hack/libs/${DST_BINARY_NAME}*
-	@wget --quiet $(MIRROR)/$(RPM_PATH)/$(IGUAZIO_VERSION)/$(SRC_BINARY_NAME).rpm -O hack/libs/$(DST_BINARY_NAME).rpm
-	@wget --quiet $(MIRROR)/$(DEB_PATH)/$(IGUAZIO_VERSION)/$(SRC_BINARY_NAME).deb -O hack/libs/$(DST_BINARY_NAME).deb
-	@touch hack/libs/$(IGUAZIO_VERSION)
+	rm -rf hack/libs/${DST_BINARY_NAME}*
+	wget --quiet $(MIRROR)/$(RPM_PATH)/$(IGUAZIO_VERSION)/$(SRC_BINARY_NAME).rpm -O hack/libs/$(DST_BINARY_NAME).rpm
+	#wget --quiet $(MIRROR)/$(DEB_PATH)/$(IGUAZIO_VERSION)/$(SRC_BINARY_NAME).deb -O hack/libs/$(DST_BINARY_NAME).deb
+	touch hack/libs/$(IGUAZIO_VERSION)
 
 .PHONY: copy
 copy:
-	@rm -rf hack/libs/${DST_BINARY_NAME}*
-	@cp $(MIRROR)/$(SRC_BINARY_NAME).rpm hack/libs/$(DST_BINARY_NAME).rpm
-	@cp $(MIRROR)/$(SRC_BINARY_NAME).deb hack/libs/$(DST_BINARY_NAME).deb
-	@touch hack/libs/$(IGUAZIO_VERSION)
+	rm -rf hack/libs/${DST_BINARY_NAME}*
+	cp $(MIRROR)/$(SRC_BINARY_NAME).rpm hack/libs/$(DST_BINARY_NAME).rpm
+	#cp $(MIRROR)/$(SRC_BINARY_NAME).deb hack/libs/$(DST_BINARY_NAME).deb
+	touch hack/libs/$(IGUAZIO_VERSION)
 
 .PHONY: release
 release: check-req $(FETCH_METHOD) build
