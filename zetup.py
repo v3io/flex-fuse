@@ -99,7 +99,7 @@ def task_build_images(project, version, mirror=None, nas_deployed_artifacts_path
 
     if not mirror:
         env['FETCH_METHOD'] = 'copy'
-        env['MIRROR'] = os.path.join(nas_deployed_artifacts_path, 'engine/zeek-packages')
+        env['MIRROR'] = os.path.join(nas_deployed_artifacts_path, 'zeek_resources/zeek-packages')
 
     project.logger.debug('Building a release candidate', cwd=cwd, cmd=cmd, env=env)
     out, _, _ = yield ziggy.shell.run(project.ctx, 'make release', cwd=cwd, env=env)
@@ -160,21 +160,25 @@ def task_push_images(project, repository, tag, pushed_images_file_path):
 
 
 @defer.inlineCallbacks
-def task_project_build(project, output_dir, tag=None, nas_deployed_artifacts_path='/mnt/nas'):
+def task_project_build(project, output_dir='flex_fuse_resources', tag='igz',
+                       mirror=None, nas_deployed_artifacts_path='/mnt/nas'):
     project.ctx.info('Building', output_dir=output_dir, tag=tag)
+    save_images_dir = os.path.join(output_dir, 'k8s_apps')
+    yield ziggy.fs.mkdir(project.ctx, save_images_dir, force=True)
     tasks_to_run = [
         {
             'name': 'build_images',
             'args': {
                 'version': tag,
                 'nas_deployed_artifacts_path': nas_deployed_artifacts_path,
+                'mirror': mirror,
             },
         },
         {
             'name': 'save_images',
             'args': {
-                'output_filepath': os.path.join(output_dir, 'flex-fuse-docker-images.tar.gz'),
-                'images': ['flex-fuse:{}'.format(tag)],
+                'output_filepath': os.path.join(save_images_dir, 'flex-fuse-docker-images.tar.gz'),
+                'images': ['iguazio/flex-fuse:{}'.format(tag)],
             },
         },
     ]
