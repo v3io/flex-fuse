@@ -3,6 +3,7 @@ package flex
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 	"syscall"
 
 	"github.com/v3io/flex-fuse/pkg/journal"
@@ -26,14 +27,17 @@ func isStaleMount(path string) bool {
 
 func isMountPoint(path string) bool {
 	journal.Debug("calling isMountPoint command", "target", path)
-	cmd := exec.Command("mountpoint", path)
-	err := cmd.Run()
+	cmd := exec.Command("mount")
+	mountList, err := cmd.CombinedOutput()
 	if err != nil {
-		journal.Debug("calling isMountPoint command", "target", path, "result", false)
+		journal.Debug("calling isMountPoint command", "target", path, "result", false, "error", err)
 		return false
 	}
-	journal.Debug("calling isMountPoint command", "target", path, "result", true)
-	return true
+	mountListString := string(mountList)
+	journal.Debug(mountListString)
+	result := strings.Contains(mountListString, path+" type")
+	journal.Debug("calling isMountPoint command", "target", path, "result", result)
+	return result
 }
 
 func MakeResponse(status, message string) *Response {
