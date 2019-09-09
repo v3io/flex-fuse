@@ -131,8 +131,8 @@ func (m *Mounter) Unmount() *Response {
 }
 
 func (m *Mounter) validate() error {
-	if m.Spec.Username == "" || m.Spec.AccessKey == "" {
-		return errors.New("missing username or access key")
+	if m.Spec.Username == "" && m.Spec.AccessKey == "" {
+		return errors.New("missing both username and access key")
 	}
 	return nil
 }

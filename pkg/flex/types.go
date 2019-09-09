@@ -86,7 +86,7 @@ type VolumeSpec struct {
 	Cluster   string `json:"cluster"`
 	Username  string `json:"kubernetes.io/secret/username"`
 	Password  string `json:"kubernetes.io/secret/password"`
-	AccessKey string `json:"kubernetes.io/secret/accessKey"`
+	AccessKey string `json:"accessKey"`
 	Tenant    string `json:"kubernetes.io/secret/tenant"`
 	PodName   string `json:"kubernetes.io/pod.name"`
 	Namespace string `json:"kubernetes.io/pod.namespace"`
