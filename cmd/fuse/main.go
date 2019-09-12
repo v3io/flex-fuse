@@ -8,20 +8,42 @@ import (
 	"github.com/v3io/flex-fuse/pkg/journal"
 )
 
-func main() {
-	var result *flex.Response
-	journal.Debug("Handling driver request", os.Args)
+func handleAction() *flex.Response {
+	journal.Debug("Handling action", os.Args)
+
 	switch action := os.Args[1]; action {
 	case "init":
-		result = flex.Init()
-	case "mount":
-		result = flex.Mount(os.Args[2], os.Args[3])
-	case "unmount":
-		result = flex.Unmount(os.Args[2])
-	default:
-		result = flex.MakeResponse("Not supported", fmt.Sprintf("Operation %s is not supported", action))
-	}
+		result := flex.NewSuccessResponse("No initialization required")
+		result.Capabilities = map[string]interface{}{
+			"attach": false,
+		}
 
-	journal.Info("Completed flex flow", "result", result)
-	result.ToJSON()
+		return result
+
+	case "mount":
+		mounter, err := flex.NewMounter(os.Args[2], os.Args[3])
+		if err != nil {
+			return flex.NewFailResponse("Failed to create mounter", err)
+		}
+
+		return mounter.Mount()
+
+	case "unmount":
+		mounter, err := flex.NewMounter(os.Args[2], "")
+		if err != nil {
+			return flex.NewFailResponse("Failed to create mounter", err)
+		}
+
+		return mounter.Unmount()
+
+	default:
+		return flex.NewFailResponse("Not supported",
+			fmt.Errorf("Operation %s is not supported", action))
+	}
+}
+
+func main() {
+
+	// handle the action and print the result
+	fmt.Printf(handleAction().ToJSON())
 }
