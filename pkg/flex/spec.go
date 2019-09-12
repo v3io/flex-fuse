@@ -1,8 +1,11 @@
 package flex
 
-import "encoding/base64"
+import (
+	"encoding/base64"
+	"errors"
+)
 
-type VolumeSpec struct {
+type Spec struct {
 	SubPath           string `json:"subPath"`
 	Container         string `json:"container"`
 	Cluster           string `json:"cluster"`
@@ -13,7 +16,7 @@ type VolumeSpec struct {
 	Name              string `json:"kubernetes.io/pvOrVolumeName"`
 }
 
-func (VolumeSpec) decodeOrDefault(value string) string {
+func (s *Spec) decodeOrDefault(value string) string {
 	bytes, err := base64.StdEncoding.DecodeString(value)
 	if err != nil {
 		return value
@@ -21,16 +24,29 @@ func (VolumeSpec) decodeOrDefault(value string) string {
 	return string(bytes)
 }
 
-func (vs *VolumeSpec) GetAccessKey() string {
-	if vs.OverrideAccessKey == "" {
-		return vs.decodeOrDefault(vs.AccessKey)
+func (s *Spec) validate() error {
+	if s.AccessKey == "" && s.OverrideAccessKey == "" {
+		return errors.New("required access key is missing")
 	}
-	return vs.OverrideAccessKey
+
+	if s.SubPath != "" && s.Container == "" {
+		return errors.New("can't have subpath without container value")
+	}
+
+	return nil
 }
 
-func (vs *VolumeSpec) GetClusterName() string {
-	if vs.Cluster == "" {
+func (s *Spec) GetAccessKey() string {
+	if s.OverrideAccessKey == "" {
+		return s.decodeOrDefault(s.AccessKey)
+	}
+	return s.OverrideAccessKey
+}
+
+func (s *Spec) GetClusterName() string {
+	if s.Cluster == "" {
 		return "default"
 	}
-	return vs.Cluster
+
+	return s.Cluster
 }

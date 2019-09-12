@@ -21,20 +21,20 @@ func handleAction() *flex.Response {
 		return result
 
 	case "mount":
-		mounter, err := flex.NewMounter(os.Args[2], os.Args[3])
+		mounter, err := flex.NewMounter()
 		if err != nil {
 			return flex.NewFailResponse("Failed to create mounter", err)
 		}
 
-		return mounter.Mount()
+		return mounter.Mount(os.Args[2], os.Args[3])
 
 	case "unmount":
-		mounter, err := flex.NewMounter(os.Args[2], "")
+		mounter, err := flex.NewMounter()
 		if err != nil {
 			return flex.NewFailResponse("Failed to create mounter", err)
 		}
 
-		return mounter.Unmount()
+		return mounter.Unmount(os.Args[2])
 
 	default:
 		return flex.NewFailResponse("Not supported",

@@ -2,32 +2,21 @@ package flex
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"github.com/v3io/flex-fuse/pkg/journal"
 )
 
 type Mounter struct {
-	Target string
-	Spec   *VolumeSpec
 	Config *Config
 }
 
-func NewMounter(target, options string) (*Mounter, error) {
-	opts := VolumeSpec{}
-	if options != "" {
-		if err := json.Unmarshal([]byte(options), &opts); err != nil {
-			return nil, err
-		}
-	}
-
+func NewMounter() (*Mounter, error) {
 	journal.Debug("Creating configuration")
 	config, err := NewConfig()
 	if err != nil {
@@ -35,48 +24,51 @@ func NewMounter(target, options string) (*Mounter, error) {
 	}
 
 	return &Mounter{
-		Target: target,
 		Config: config,
-		Spec:   &opts,
 	}, nil
 }
 
-func (m *Mounter) Mount() *Response {
+func (m *Mounter) Mount(targetPath string, specString string) *Response {
 	journal.Debug("Mounting")
 
-	if err := m.validate(); err != nil {
+	spec := Spec{}
+	if err := json.Unmarshal([]byte(specString), &spec); err != nil {
+		return NewFailResponse("Failed to unmarshal spec", err)
+	}
+
+	if err := spec.validate(); err != nil {
 		return NewFailResponse("Mount failed validation", err)
 	}
 
 	if m.Config.Type == "link" {
-		return m.mountAsLink()
+		return m.mountAsLink(&spec, targetPath)
 	}
 
-	if isMountPoint(m.Target) {
-		return NewSuccessResponse(fmt.Sprintf("Already mounted: %s", m.Target))
+	if isMountPoint(targetPath) {
+		return NewSuccessResponse(fmt.Sprintf("Already mounted: %s", targetPath))
 	}
 
-	return m.createV3IOFUSEContainer(m.Target)
+	return m.createV3IOFUSEContainer(&spec, targetPath)
 }
 
-func (m *Mounter) Unmount() *Response {
+func (m *Mounter) Unmount(targetPath string) *Response {
 	journal.Debug("Unmounting")
 
 	if m.Config.Type == "link" {
-		return m.unmountAsLink()
+		return m.unmountAsLink(targetPath)
 	}
 
-	if !isMountPoint(m.Target) {
+	if !isMountPoint(targetPath) {
 		return NewSuccessResponse("Not a mountpoint, nothing to do")
 	}
 
-	return m.removeV3IOFUSEContainer(m.Target)
+	return m.removeV3IOFUSEContainer(targetPath)
 }
 
-func (m *Mounter) createV3IOFUSEContainer(targetPath string) *Response {
+func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) *Response {
 	journal.Info("Creating v3io-fuse container", "target", targetPath)
 
-	dataUrls, err := m.Config.DataURLs(m.Spec.GetClusterName())
+	dataUrls, err := m.Config.DataURLs(spec.GetClusterName())
 	if err != nil {
 		return NewFailResponse("Could not get cluster data urls", err)
 	}
@@ -100,13 +92,13 @@ func (m *Mounter) createV3IOFUSEContainer(targetPath string) *Response {
 		"-o", "allow_other",
 		"--connection_strings", dataUrls,
 		"--mountpoint", "/fuse_mount",
-		"--session_key", m.Spec.GetAccessKey(),
+		"--session_key", spec.GetAccessKey(),
 	}
 
-	if m.Spec.Container != "" {
-		args = append(args, "-a", m.Spec.Container)
-		if m.Spec.SubPath != "" {
-			args = append(args, "-p", m.Spec.SubPath)
+	if spec.Container != "" {
+		args = append(args, "-a", spec.Container)
+		if spec.SubPath != "" {
+			args = append(args, "-p", spec.SubPath)
 		}
 	}
 
@@ -151,69 +143,41 @@ func (m *Mounter) removeV3IOFUSEContainer(targetPath string) *Response {
 	return NewFailResponse(fmt.Sprintf("Could not umount due to timeout: %s", targetPath), nil)
 }
 
-func (m *Mounter) mountAsLink() *Response {
-	journal.Info("Mounting as link", "target", m.Target)
-	targetPath := path.Join("/mnt/v3io", m.Spec.Namespace, m.Spec.Container)
+func (m *Mounter) mountAsLink(spec *Spec, targetPath string) *Response {
+	journal.Info("Mounting as link", "target", targetPath)
+	linkPath := path.Join("/mnt/v3io", spec.Namespace, spec.Container)
 	response := &Response{}
 
-	if !isMountPoint(targetPath) {
-		journal.Debug("Creating folder", "target", targetPath)
-		if err := os.MkdirAll(targetPath, 0755); err != nil {
-			return NewFailResponse(fmt.Sprintf("Unable to create target %s", targetPath), err)
+	if !isMountPoint(linkPath) {
+		journal.Debug("Creating folder", "linkPath", linkPath)
+		if err := os.MkdirAll(linkPath, 0755); err != nil {
+			return NewFailResponse(fmt.Sprintf("Unable to create target %s", linkPath), err)
 		}
-		response = m.createV3IOFUSEContainer(targetPath)
+		response = m.createV3IOFUSEContainer(spec, linkPath)
 	}
 
-	if err := os.Remove(m.Target); err != nil {
-		m.Unmount()
-		return NewFailResponse(fmt.Sprintf("Unable to remove target %s", m.Target), err)
+	if err := os.Remove(targetPath); err != nil {
+		return NewFailResponse(fmt.Sprintf("Unable to remove target %s", targetPath), err)
 	}
 
-	if err := os.Symlink(targetPath, m.Target); err != nil {
-		return NewFailResponse(fmt.Sprintf("Unable to create link %s to target %s", targetPath, m.Target), err)
+	if err := os.Symlink(linkPath, targetPath); err != nil {
+		return NewFailResponse(fmt.Sprintf("Unable to create link %s to target %s", linkPath, targetPath), err)
 	}
 
 	return response
 }
 
-func (m *Mounter) unmountAsLink() *Response {
-	journal.Info("Calling unmountAsLink command", "target", m.Target)
-	if err := os.Remove(m.Target); err != nil {
+func (m *Mounter) unmountAsLink(targetPath string) *Response {
+	journal.Info("Calling unmountAsLink command", "target", targetPath)
+	if err := os.Remove(targetPath); err != nil {
 		return NewFailResponse("unable to remove link", err)
 	}
 
 	return NewSuccessResponse("link removed")
 }
 
-func (m *Mounter) validate() error {
-	if m.Spec.AccessKey == "" && m.Spec.OverrideAccessKey == "" {
-		return errors.New("required access key is missing")
-	}
-	if m.Spec.SubPath != "" && m.Spec.Container == "" {
-		return errors.New("can't have subpath without container value")
-	}
-	return nil
-}
-
 func getContainerName(targetPath string) string {
 	return filepath.Base(targetPath)
-}
-
-func isStaleMount(path string) bool {
-	journal.Debug("Checking if mount point is stale", "target", path)
-	stat := syscall.Stat_t{}
-	err := syscall.Stat(path, &stat)
-	if err != nil {
-		if errno, ok := err.(syscall.Errno); ok {
-			if errno == syscall.ESTALE {
-				journal.Debug("Mount point is stale", "target", path)
-				return true
-			}
-		}
-	}
-
-	journal.Debug("Mount point is not stale", "target", path)
-	return false
 }
 
 func isMountPoint(path string) bool {
