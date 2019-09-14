@@ -11,6 +11,10 @@ import (
 func handleAction() *flex.Response {
 	journal.Debug("Handling action", os.Args)
 
+	if len(os.Args) < 2 {
+		return getArgumentFailResponse("Fuse requires at least an action argument")
+	}
+
 	switch action := os.Args[1]; action {
 	case "init":
 		result := flex.NewSuccessResponse("No initialization required")
@@ -21,6 +25,10 @@ func handleAction() *flex.Response {
 		return result
 
 	case "mount":
+		if len(os.Args) != 4 {
+			return getArgumentFailResponse("Mount requires 2 exactly arguments")
+		}
+
 		mounter, err := flex.NewMounter()
 		if err != nil {
 			return flex.NewFailResponse("Failed to create mounter", err)
@@ -29,6 +37,10 @@ func handleAction() *flex.Response {
 		return mounter.Mount(os.Args[2], os.Args[3])
 
 	case "unmount":
+		if len(os.Args) != 3 {
+			return getArgumentFailResponse("Mount requires 1 exactly argument")
+		}
+
 		mounter, err := flex.NewMounter()
 		if err != nil {
 			return flex.NewFailResponse("Failed to create mounter", err)
@@ -37,9 +49,12 @@ func handleAction() *flex.Response {
 		return mounter.Unmount(os.Args[2])
 
 	default:
-		return flex.NewFailResponse("Not supported",
-			fmt.Errorf("Operation %s is not supported", action))
+		return getArgumentFailResponse("Received action is not supported")
 	}
+}
+
+func getArgumentFailResponse(message string) *flex.Response {
+	return flex.NewFailResponse(message, fmt.Errorf("Got %s", os.Args))
 }
 
 func main() {
