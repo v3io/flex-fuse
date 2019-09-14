@@ -60,5 +60,5 @@ func getArgumentFailResponse(message string) *flex.Response {
 func main() {
 
 	// handle the action and print the result
-	fmt.Printf(handleAction().ToJSON())
+	fmt.Print(handleAction().ToJSON())
 }

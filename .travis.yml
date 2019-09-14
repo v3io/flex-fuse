@@ -1,0 +1,16 @@
+sudo: required
+
+services:
+  - docker
+
+addons:
+  apt:
+    packages:
+      - docker-ce
+
+language: go
+go_import_path: github.com/v3io/flex-fuse
+go: "1.10"
+
+script:
+  - make lint vet build

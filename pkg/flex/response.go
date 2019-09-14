@@ -49,5 +49,5 @@ func (r *Response) ToJSON() string {
 		return fmt.Sprintf(`{"status": "Failure", "Message": "%s"}`, err)
 	}
 
-	return fmt.Sprintf("%s", string(jsonBytes))
+	return string(jsonBytes)
 }

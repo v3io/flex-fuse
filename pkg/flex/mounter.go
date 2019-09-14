@@ -100,7 +100,7 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 
 	dataUrls, err := m.Config.DataURLs(spec.GetClusterName())
 	if err != nil {
-		return fmt.Errorf("Could not get cluster data urls: %s", err.Error)
+		return fmt.Errorf("Could not get cluster data urls: %s", err.Error())
 	}
 
 	containerName, err := getContainerNameFromTargetPath(targetPath)
