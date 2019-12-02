@@ -98,6 +98,16 @@ func (m *Mounter) Unmount(targetPath string) *Response {
 func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 	journal.Info("Creating v3io-fuse container", "target", targetPath)
 
+	ImageRepository := m.Config.ImageRepository
+	if ImageRepository == "" {
+		ImageRepository = "quay.io/iguazio"
+	}
+
+	ImageTag := m.Config.ImageTag
+	if ImageTag == "" {
+		ImageTag = "local"
+	}
+
 	dataUrls, err := m.Config.DataURLs(spec.GetClusterName())
 	if err != nil {
 		return fmt.Errorf("Could not get cluster data urls: %s", err.Error())
@@ -123,7 +133,7 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 		"--net=host",
 		"--mount",
 		fmt.Sprintf("type=bind,src=%s,target=/fuse_mount,bind-propagation=shared", targetPath),
-		"quay.io/iguazio/v3io-fuse:local",
+		fmt.Sprintf("%s/v3io-fuse:%s", ImageRepository, ImageTag),
 		"-o", "allow_other",
 		"--connection_strings", dataUrls,
 		"--mountpoint", "/fuse_mount",

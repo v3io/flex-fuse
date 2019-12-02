@@ -14,11 +14,13 @@ const (
 )
 
 type Config struct {
-	RootPath string          `json:"root_path"`
-	FusePath string          `json:"fuse_path"`
-	Debug    bool            `json:"debug"`
-	Type     string          `json:"type"`
-	Clusters []ClusterConfig `json:"clusters"`
+	ImageRepository  string          `json:"image_repository"`
+	ImageTag         string          `json:"image_tag"`
+	RootPath         string          `json:"root_path"`
+	FusePath         string          `json:"fuse_path"`
+	Debug            bool            `json:"debug"`
+	Type             string          `json:"type"`
+	Clusters         []ClusterConfig `json:"clusters"`
 }
 
 func NewConfig() (*Config, error) {
