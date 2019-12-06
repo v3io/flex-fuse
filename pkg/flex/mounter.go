@@ -100,7 +100,7 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 
 	ImageRepository := m.Config.ImageRepository
 	if ImageRepository == "" {
-		ImageRepository = "quay.io/iguazio"
+		ImageRepository = "iguazio/v3io-fuse"
 	}
 
 	ImageTag := m.Config.ImageTag
@@ -133,7 +133,7 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 		"--net=host",
 		"--mount",
 		fmt.Sprintf("type=bind,src=%s,target=/fuse_mount,bind-propagation=shared", targetPath),
-		fmt.Sprintf("%s/v3io-fuse:%s", ImageRepository, ImageTag),
+		fmt.Sprintf("%s:%s", ImageRepository, ImageTag),
 		"-o", "allow_other",
 		"--connection_strings", dataUrls,
 		"--mountpoint", "/fuse_mount",
