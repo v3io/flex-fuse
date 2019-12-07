@@ -14,4 +14,3 @@ go: "1.10"
 
 script:
   - make lint vet build
-

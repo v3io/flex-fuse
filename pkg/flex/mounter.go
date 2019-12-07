@@ -2,208 +2,274 @@ package flex
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/v3io/flex-fuse/pkg/journal"
 )
 
 type Mounter struct {
-	Target string
-	Spec   *VolumeSpec
-
 	Config *Config
 }
 
-func (m *Mounter) doMount(targetPath string) *Response {
-	dataUrls, err := m.Config.DataURLs(m.Spec.GetClusterName())
-	if err != nil {
-		return Fail("could not get cluster data urls", err)
-	}
-
-	args := []string{"-o", "allow_other",
-		"--connection_strings", dataUrls,
-		"--mountpoint", targetPath,
-		"--session_key", m.Spec.GetAccessKey()}
-	if m.Spec.Container != "" {
-		args = append(args, "-a", m.Spec.Container)
-		if m.Spec.SubPath != "" {
-			args = append(args, "-p", m.Spec.SubPath)
-		}
-	}
-	mountCmd := exec.Command(m.Config.FusePath, args...)
-
-	journal.Debug("Calling mount command", "path", mountCmd.Path, "args", mountCmd.Args)
-	if err := mountCmd.Start(); err != nil {
-		return Fail(fmt.Sprintf("Could not mount: %s", m.Target), err)
-	}
-	for _, interval := range []time.Duration{1, 2, 4, 2, 1} {
-		if isMountPoint(targetPath) {
-			return Success("Mount completed!")
-		}
-		time.Sleep(interval * time.Second)
-	}
-	return Fail(fmt.Sprintf("Could not mount due to timeout: %s", m.Target), nil)
-}
-
-func (m *Mounter) osMount() *Response {
-	journal.Info("Calling osMount command", "target", m.Target)
-	if isStaleMount(m.Target) {
-		unmountCmd := exec.Command("umount", m.Target)
-		out, err := unmountCmd.CombinedOutput()
-		if err != nil {
-			return Fail(fmt.Sprintf("Could not unmount stale mount %s: %s", m.Target, out), err)
-		}
-	}
-
-	if !isMountPoint(m.Target) {
-		return m.doMount(m.Target)
-	}
-	return Success(fmt.Sprintf("Already mounted: %s", m.Target))
-}
-
-func (m *Mounter) Mount() *Response {
-	if err := m.validate(); err != nil {
-		return Fail("Mount failed validation", err)
-	}
-	if m.Config.Type == "link" {
-		return m.mountAsLink()
-	}
-	return m.osMount()
-}
-
-func (m *Mounter) mountAsLink() *Response {
-	journal.Info("Calling mountAsLink command", "target", m.Target)
-	targetPath := path.Join("/mnt/v3io", m.Spec.Namespace, m.Spec.Container)
-	response := &Response{}
-	if !isMountPoint(targetPath) {
-		journal.Debug("Creating folder", "target", targetPath)
-		if err := os.MkdirAll(targetPath, 0755); err != nil {
-			return Fail(fmt.Sprintf("unable to create target %s", targetPath), err)
-		}
-		response = m.doMount(targetPath)
-	}
-
-	if err := os.Remove(m.Target); err != nil {
-		m.Unmount()
-		return Fail(fmt.Sprintf("unable to remove target %s", m.Target), err)
-	}
-
-	if err := os.Symlink(targetPath, m.Target); err != nil {
-		return Fail(fmt.Sprintf("unable to create link %s to target %s", targetPath, m.Target), err)
-	}
-	return response
-}
-
-func (m *Mounter) unmountAsLink() *Response {
-	journal.Info("Calling unmountAsLink command", "target", m.Target)
-	if err := os.Remove(m.Target); err != nil {
-		return Fail("unable to remove link", err)
-	}
-	return Success("link removed")
-}
-
-func (m *Mounter) osUmount() *Response {
-	journal.Info("Calling osUmount command", "target", m.Target)
-	if isMountPoint(m.Target) {
-		args := [][]string{
-			{m.Target},
-			{"--force", m.Target},
-		}
-		for _, commandArgs := range args {
-			cmd := exec.Command("umount", commandArgs...)
-			journal.Debug("Calling umount command", "path", cmd.Path, "args", cmd.Args)
-			if err := cmd.Start(); err != nil {
-				return Fail("could not unmount", err)
-			}
-			for _, interval := range []time.Duration{1, 2, 4, 2, 1} {
-				if !isMountPoint(m.Target) {
-					return Success("Unmount completed!")
-				}
-				time.Sleep(interval * time.Second)
-			}
-		}
-		return Fail(fmt.Sprintf("Could not umount due to timeout: %s", m.Target), nil)
-	}
-	return Success("Unmount completed!")
-}
-
-func (m *Mounter) Unmount() *Response {
-	if m.Config.Type == "link" {
-		return m.unmountAsLink()
-	}
-	return m.osUmount()
-}
-
-func (m *Mounter) validate() error {
-	if m.Spec.AccessKey == "" && m.Spec.OverrideAccessKey == "" {
-		return errors.New("required access key is missing")
-	}
-	if m.Spec.SubPath != "" && m.Spec.Container == "" {
-		return errors.New("can't have subpath without container value")
-	}
-	return nil
-}
-
-func NewMounter(target, options string) (*Mounter, error) {
-	opts := VolumeSpec{}
-	if options != "" {
-		if err := json.Unmarshal([]byte(options), &opts); err != nil {
-			return nil, err
-		}
-	}
-	journal.Debug("Reading config")
-	config, err := ReadConfig()
+func NewMounter() (*Mounter, error) {
+	journal.Debug("Creating configuration")
+	config, err := NewConfig()
 	if err != nil {
 		return nil, err
 	}
+
 	return &Mounter{
-		Target: target,
 		Config: config,
-		Spec:   &opts,
 	}, nil
 }
 
-func Mount(target, options string) *Response {
-	mounter, err := NewMounter(target, options)
-	if err != nil {
-		return Fail("unable to create mounter", err)
+func (m *Mounter) Mount(targetPath string, specString string) *Response {
+	journal.Debug("Mounting")
+
+	spec := Spec{}
+	if err := json.Unmarshal([]byte(specString), &spec); err != nil {
+		return NewFailResponse("Failed to unmarshal spec", err)
 	}
-	return mounter.Mount()
+
+	if err := spec.validate(); err != nil {
+		return NewFailResponse("Mount failed validation", err)
+	}
+
+	if m.Config.Type == "link" {
+		return m.mountAsLink(&spec, targetPath)
+	}
+
+	if isMountPoint(targetPath) {
+		return NewSuccessResponse(fmt.Sprintf("Already mounted: %s", targetPath))
+	}
+
+	if err := m.createV3IOFUSEContainer(&spec, targetPath); err != nil {
+		return NewFailResponse("Failed to create v3io FUSE container", err)
+	}
+
+	return NewSuccessResponse("Successfully mounted")
 }
 
-func Unmount(target string) *Response {
-	mounter, err := NewMounter(target, "")
-	if err != nil {
-		return Fail("unable to create mounter", err)
+func (m *Mounter) Unmount(targetPath string) *Response {
+	journal.Debug("Unmounting")
+
+	if m.Config.Type == "link" {
+		return m.unmountAsLink(targetPath)
 	}
-	return mounter.Unmount()
+
+	if !isMountPoint(targetPath) {
+		return NewSuccessResponse(fmt.Sprintf("%s Not a mountpoint, nothing to do", targetPath))
+	}
+
+	if err := m.removeV3IOFUSEContainer(targetPath); err != nil {
+		return NewFailResponse("Failed to remove v3io FUSE container", err)
+	}
+
+	journal.Info("Unmounting target path with umount", "target", targetPath)
+
+	umountCommand := exec.Command("umount", targetPath)
+	if err := umountCommand.Start(); err != nil {
+		return NewFailResponse("Failed to call unmount", err)
+	}
+
+	for _, interval := range []time.Duration{1, 2, 4} {
+		if !isMountPoint(targetPath) {
+
+			// once unmounted, remove it
+			if err := os.Remove(targetPath); err != nil {
+				return NewFailResponse(fmt.Sprintf("Could not remove directory %s", targetPath), err)
+			}
+
+			return NewSuccessResponse("Successfully unmounted")
+		}
+
+		time.Sleep(interval * time.Second)
+	}
+
+	return NewFailResponse(fmt.Sprintf("Failed to umount %s due to timeout", targetPath), nil)
 }
 
-func Init() *Response {
-	journal.Info("Initializing")
-	config, err := ReadConfig()
+func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
+	journal.Info("Creating v3io-fuse container", "target", targetPath)
+
+	ImageRepository := m.Config.ImageRepository
+	if ImageRepository == "" {
+		ImageRepository = "iguazio/v3io-fuse"
+	}
+
+	ImageTag := m.Config.ImageTag
+	if ImageTag == "" {
+		ImageTag = "local"
+	}
+
+	dataUrls, err := m.Config.DataURLs(spec.GetClusterName())
 	if err != nil {
-		return Fail("Initialization script failed to read config", err)
+		return fmt.Errorf("Could not get cluster data urls: %s", err.Error())
 	}
 
-	journal.Debug("Preparing to run install", config.FusePath)
-
-	location := path.Dir(os.Args[0])
-	command := exec.Command("/bin/bash", path.Join(location, "install.sh"))
-
-	journal.Debug("Calling install command", "path", command.Path, "args", command.Args)
-	if err := command.Run(); err != nil {
-		return Fail("Initialization script failed", err)
+	containerName, err := getContainerNameFromTargetPath(targetPath)
+	if err != nil {
+		return fmt.Errorf("Failed to get container name: %s", err.Error())
 	}
 
-	resp := Success("Initialization completed")
-	resp.Capabilities = map[string]interface{}{
-		"attach": false,
+	args := []string{
+		"run",
+		"--detach",
+		"--rm",
+		"--privileged",
+		"--name",
+		containerName,
+		// TODO: discover if infiniband exists and pass this
+		// "--device",
+		// "/dev/infiniband/uverbs0",
+		"--device",
+		"/dev/fuse",
+		"--net=host",
+		"--mount",
+		fmt.Sprintf("type=bind,src=%s,target=/fuse_mount,bind-propagation=shared", targetPath),
+		fmt.Sprintf("%s:%s", ImageRepository, ImageTag),
+		"-o", "allow_other",
+		"--connection_strings", dataUrls,
+		"--mountpoint", "/fuse_mount",
+		"--session_key", spec.GetAccessKey(),
 	}
-	return resp
+
+	if spec.Container != "" {
+		args = append(args, "-a", spec.Container)
+		if spec.SubPath != "" {
+			args = append(args, "-p", spec.SubPath)
+		}
+	}
+
+	dockerCommand := exec.Command("/usr/bin/docker", args...)
+
+	journal.Debug("Running docker run command", "path", dockerCommand.Path, "args", dockerCommand.Args)
+	if dockerCommandOutput, err := dockerCommand.CombinedOutput(); err != nil {
+		return fmt.Errorf("Failed to create v3io-fuse container %s: [%s] %s",
+			targetPath,
+			err.Error(),
+			string(dockerCommandOutput))
+	}
+
+	for _, interval := range []time.Duration{1, 2, 4, 2, 1} {
+		if isMountPoint(targetPath) {
+			return nil
+		}
+
+		time.Sleep(interval * time.Second)
+	}
+
+	return fmt.Errorf("Failed to mount %s due to timeout", targetPath)
+}
+
+func (m *Mounter) removeV3IOFUSEContainer(targetPath string) error {
+	journal.Info("Removing v3io-fuse container", "target", targetPath)
+
+	containerName, err := getContainerNameFromTargetPath(targetPath)
+	if err != nil {
+		return fmt.Errorf("Could not get container name: %s", err)
+	}
+
+	args := []string{
+		"rm",
+		"--force",
+		containerName,
+	}
+
+	dockerCommand := exec.Command("/usr/bin/docker", args...)
+
+	journal.Debug("Running docker run command", "path", dockerCommand.Path, "args", dockerCommand.Args)
+	if err := dockerCommand.Run(); err != nil {
+		return fmt.Errorf("Could not delete v3io-fuse container %s: %s", targetPath, err)
+	}
+
+	journal.Debug("Container removed", "containerName", containerName)
+
+	return nil
+}
+
+func (m *Mounter) mountAsLink(spec *Spec, targetPath string) *Response {
+	journal.Info("Mounting as link", "target", targetPath)
+	linkPath := path.Join("/mnt/v3io", spec.Namespace, spec.Container)
+
+	if !isMountPoint(linkPath) {
+		journal.Debug("Creating folder", "linkPath", linkPath)
+		if err := os.MkdirAll(linkPath, 0755); err != nil {
+			return NewFailResponse(fmt.Sprintf("Failed to create target %s", linkPath), err)
+		}
+
+		if err := m.createV3IOFUSEContainer(spec, linkPath); err != nil {
+			return NewFailResponse("Failed to create v3io FUSE container", err)
+		}
+	}
+
+	if err := os.Remove(targetPath); err != nil {
+		return NewFailResponse(fmt.Sprintf("Failed to remove target %s", targetPath), err)
+	}
+
+	if err := os.Symlink(linkPath, targetPath); err != nil {
+		return NewFailResponse(fmt.Sprintf("Failed to create link %s to target %s", linkPath, targetPath), err)
+	}
+
+	return NewSuccessResponse("Successfully mounted as link")
+}
+
+func (m *Mounter) unmountAsLink(targetPath string) *Response {
+	journal.Info("Calling unmountAsLink command", "target", targetPath)
+	if err := os.Remove(targetPath); err != nil {
+		return NewFailResponse("unable to remove link", err)
+	}
+
+	return NewSuccessResponse("link removed")
+}
+
+// /var/lib/kubelet/pods/0c082652-d6c7-11e9-9fd4-a4bf015abcab/volumes/v3io~fuse/v3io-fuse -> "v3io-fuse-0c082652-d6c7-11e9-9fd4-a4bf015abcab-v3io-fuse
+func getContainerNameFromTargetPath(targetPath string) (string, error) {
+	splitTargetPath := strings.Split(targetPath, string(filepath.Separator))
+
+	for targetPathPartIdx, targetPathPart := range splitTargetPath {
+
+		// if we found the pods part, return the part after it - if not at the end
+		if targetPathPart == "pods" {
+			podIDIdx := targetPathPartIdx + 1
+
+			if podIDIdx >= len(splitTargetPath) {
+				return "", fmt.Errorf("Expected a directory after pods, found it at the end: %s", targetPath)
+
+			}
+
+			// v3io-fuse-<pod id>-<last part of path, which is the volume name>
+			return fmt.Sprintf("v3io-fuse-%s-%s", splitTargetPath[podIDIdx], splitTargetPath[len(splitTargetPath)-1]), nil
+		}
+	}
+
+	return "", fmt.Errorf("Could not find pod directory in path: %s", targetPath)
+}
+
+func isMountPoint(path string) bool {
+	journal.Debug("Checking if path is a mount point", "target", path)
+
+	cmd := exec.Command("mount")
+	mountList, err := cmd.CombinedOutput()
+	if err != nil {
+		journal.Debug("Path is not a mount point", "target", path)
+		return false
+	}
+
+	mountListString := string(mountList)
+	result := strings.Contains(mountListString, path+" type")
+
+	if result {
+		journal.Debug("Path is a mount point", "target", path)
+	} else {
+		journal.Debug("Path is not a mount point", "target", path)
+	}
+
+	return result
 }
