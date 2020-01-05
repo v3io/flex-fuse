@@ -121,13 +121,14 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 	args := []string{
 		"run",
 		"--detach",
-		"--rm",
 		"--privileged",
 		"--name",
 		containerName,
 		// TODO: discover if infiniband exists and pass this
 		// "--device",
 		// "/dev/infiniband/uverbs0",
+		"--restart",
+		"always",
 		"--device",
 		"/dev/fuse",
 		"--net=host",
