@@ -3,8 +3,13 @@ package flex
 import (
 	"encoding/base64"
 	"errors"
+	"os"
 )
 
+type DirToCreate struct {
+	Name              string `json:"name"`
+	Permissions       os.FileMode `json:"permissions"`
+}
 type Spec struct {
 	SubPath           string `json:"subPath"`
 	Container         string `json:"container"`
@@ -14,6 +19,7 @@ type Spec struct {
 	PodName           string `json:"kubernetes.io/pod.name"`
 	Namespace         string `json:"kubernetes.io/pod.namespace"`
 	Name              string `json:"kubernetes.io/pvOrVolumeName"`
+	DirsToCreate      string `json:"dirsToCreate"`
 }
 
 func (s *Spec) decodeOrDefault(value string) string {

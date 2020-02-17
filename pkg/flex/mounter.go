@@ -53,7 +53,31 @@ func (m *Mounter) Mount(targetPath string, specString string) *Response {
 		return NewFailResponse("Failed to create v3io FUSE container", err)
 	}
 
+	m.createDirs(spec, targetPath)
+
 	return NewSuccessResponse("Successfully mounted")
+}
+
+func (m *Mounter) createDirs(spec Spec, targetPath string) {
+	var dirsToCreate []DirToCreate
+	if err := json.Unmarshal([]byte(spec.DirsToCreate), &dirsToCreate); err != nil {
+		journal.Warn(fmt.Sprintf("Failed to parse dirsToCreate (%s)", spec.DirsToCreate))
+	} else {
+		for _, dir := range dirsToCreate {
+			if strings.HasPrefix(dir.Name, "/") {
+				journal.Warn(fmt.Sprintf("Only creation of relative path is supported (%s)", dir.Name))
+				continue
+			}
+			dirToCreate := fmt.Sprintf("%s/%s", targetPath, dir.Name)
+			if _, statErr := os.Stat(dirToCreate); statErr != nil {
+				if os.IsNotExist(statErr) {
+					if err := os.MkdirAll(dirToCreate, dir.Permissions); err != nil {
+						journal.Warn("Failed to create folder (path: %s, filemode: %o): %s", dir.Name, dir.Permissions, err.Error())
+					}
+				}
+			}
+		}
+	}
 }
 
 func (m *Mounter) Unmount(targetPath string) *Response {
