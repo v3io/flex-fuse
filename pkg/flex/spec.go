@@ -10,6 +10,7 @@ type DirToCreate struct {
 	Name              string `json:"name"`
 	Permissions       os.FileMode `json:"permissions"`
 }
+
 type Spec struct {
 	SubPath           string `json:"subPath"`
 	Container         string `json:"container"`
