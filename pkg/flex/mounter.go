@@ -53,7 +53,40 @@ func (m *Mounter) Mount(targetPath string, specString string) *Response {
 		return NewFailResponse("Failed to create v3io FUSE container", err)
 	}
 
+	if err := m.createDirs(spec, targetPath); err != nil {
+		return NewFailResponse("Failed to create folders", err)
+	}
+
 	return NewSuccessResponse("Successfully mounted")
+}
+
+func (m *Mounter) createDirs(spec Spec, targetPath string) error {
+	var dirsToCreate []DirToCreate
+	if err := json.Unmarshal([]byte(spec.DirsToCreate), &dirsToCreate); err != nil {
+		return fmt.Errorf("Failed to parse dirsToCreate [%s]: %s", spec.DirsToCreate, err.Error())
+	}
+	for _, dir := range dirsToCreate {
+		if strings.HasPrefix(dir.Name, "/") {
+			return fmt.Errorf("Only creation of relative path is supported (%s)", dir.Name)
+		}
+		dirToCreate := fmt.Sprintf("%s/%s", targetPath, dir.Name)
+
+		_, err := os.Stat(dirToCreate)
+		if err == nil {
+			journal.Debug(fmt.Sprintf("Folder already exists: %s", dirToCreate))
+			continue
+		}
+
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("Stat failed for folder [%s]: %s", dirToCreate, err)
+		}
+
+		if err := os.MkdirAll(dirToCreate, dir.Permissions); err != nil {
+			return fmt.Errorf("Failed to create folder (path: %s, filemode: %o): %s", dir.Name, dir.Permissions, err.Error())
+		}
+		journal.Debug(fmt.Sprintf("Created folder: %s", dirToCreate))
+	}
+	return nil
 }
 
 func (m *Mounter) Unmount(targetPath string) *Response {
