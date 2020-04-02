@@ -63,7 +63,10 @@ func (m *Mounter) Mount(targetPath string, specString string) *Response {
 func (m *Mounter) createDirs(spec Spec, targetPath string) error {
 	var dirsToCreate []DirToCreate
 	if err := json.Unmarshal([]byte(spec.DirsToCreate), &dirsToCreate); err != nil {
-		return fmt.Errorf("Failed to parse dirsToCreate [%s]: %s", spec.DirsToCreate, err.Error())
+		if spec.DirsToCreate != "" {
+			return fmt.Errorf("Failed to parse dirsToCreate [%s]: %s", spec.DirsToCreate, err.Error())
+		}
+		return nil
 	}
 	for _, dir := range dirsToCreate {
 		if strings.HasPrefix(dir.Name, "/") {
