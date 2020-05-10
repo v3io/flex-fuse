@@ -30,6 +30,15 @@ echo "-------------- v3io.conf BEGIN ----------------"
 cat /etc/v3io/fuse/v3io.conf
 echo "-------------- v3io.conf END   ----------------"
 
+if [ -e "/etc/config/v3io/fuse_v3io_config.json" ]; then
+  cp "/etc/config/v3io/fuse_v3io_config.json" "/etc/v3io/fuse/fuse_v3io_config.json"
+  echo "-------------- fuse_v3io_config.json BEGIN ----------------"
+  cat /etc/v3io/fuse/fuse_v3io_config.json
+  echo "-------------- fuse_v3io_config.json END   ----------------"
+else
+  echo "fuse v3io_config file not exists"
+fi
+
 echo "$(date) - Copying install.sh and libs folder to $install_dir"
 cp "/install.sh" "$install_dir/"
 cp -r "/libs" "$install_dir/"

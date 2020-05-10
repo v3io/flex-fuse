@@ -158,6 +158,7 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 		"run",
 		"--detach",
 		"--privileged",
+		"-v", "/etc/v3io/fuse:/etc/v3io/fuse",
 		"--name",
 		containerName,
 		// TODO: discover if infiniband exists and pass this
@@ -175,6 +176,11 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 		"--connection_strings", dataUrls,
 		"--mountpoint", "/fuse_mount",
 		"--session_key", spec.GetAccessKey(),
+	}
+
+	V3ioConfigPath := m.Config.V3ioConfigPath
+	if V3ioConfigPath != "" {
+		args = append(args, "-f", V3ioConfigPath)
 	}
 
 	if spec.Container != "" {
