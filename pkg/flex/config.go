@@ -21,6 +21,7 @@ type Config struct {
 	Debug            bool            `json:"debug"`
 	Type             string          `json:"type"`
 	Clusters         []ClusterConfig `json:"clusters"`
+	V3ioConfigPath   string          `json:"v3io_config_path"`
 }
 
 func NewConfig() (*Config, error) {
