@@ -162,7 +162,7 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 	}
 	dockerRemoveCommand := exec.Command("/usr/bin/docker", args...)
 
-	journal.Debug("Running moving old container", "path", dockerRemoveCommand.Path, "args", dockerRemoveCommand.Args)
+	journal.Debug("Removing old container", "path", dockerRemoveCommand.Path, "args", dockerRemoveCommand.Args)
 	if err = dockerRemoveCommand.Run(); err != nil {
 
 		// it's ok if the command runs but exits with a failure, this is in the case the container doesn't exist.
