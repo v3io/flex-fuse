@@ -155,25 +155,11 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 	}
 
 	// Ensure the container doesn't already exist
-	args := []string{
-		"rm",
-		"-f",
-		containerName,
-	}
-	dockerRemoveCommand := exec.Command("/usr/bin/docker", args...)
-
-	journal.Debug("Removing old container", "path", dockerRemoveCommand.Path, "args", dockerRemoveCommand.Args)
-	if err = dockerRemoveCommand.Run(); err != nil {
-
-		// it's ok if the command runs but exits with a failure, this is in the case the container doesn't exist.
-		// so we check if the error type isn't an exit error and if so return the error.
-		if _, ok := err.(*exec.ExitError); !ok {
-			return fmt.Errorf("Failed to remove old container: %s", err.Error())
-		}
-	}
+	// It's ok if the command runs but exits with a failure, this is in the case the container doesn't exist.
+	m.removeV3IOFUSEContainer(targetPath) // nolint: errcheck
 
 	// Create the new container
-	args = []string{
+	args := []string{
 		"run",
 		"--detach",
 		"--privileged",
