@@ -232,7 +232,7 @@ func (m *Mounter) removeV3IOFUSEContainer(targetPath string) error {
 
 	dockerCommand := exec.Command("/usr/bin/docker", args...)
 
-	journal.Debug("Running docker run command", "path", dockerCommand.Path, "args", dockerCommand.Args)
+	journal.Debug("Running docker rm command", "path", dockerCommand.Path, "args", dockerCommand.Args)
 	if err := dockerCommand.Run(); err != nil {
 		return fmt.Errorf("Could not delete v3io-fuse container %s: %s", targetPath, err)
 	}
