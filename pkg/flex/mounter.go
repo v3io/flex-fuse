@@ -154,6 +154,11 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 		return fmt.Errorf("Failed to get container name: %s", err.Error())
 	}
 
+	// Ensure the container doesn't already exist
+	// It's ok if the command runs but exits with a failure, this is in the case the container doesn't exist.
+	m.removeV3IOFUSEContainer(targetPath) // nolint: errcheck
+
+	// Create the new container
 	args := []string{
 		"run",
 		"--detach",
@@ -227,7 +232,7 @@ func (m *Mounter) removeV3IOFUSEContainer(targetPath string) error {
 
 	dockerCommand := exec.Command("/usr/bin/docker", args...)
 
-	journal.Debug("Running docker run command", "path", dockerCommand.Path, "args", dockerCommand.Args)
+	journal.Debug("Running docker rm command", "path", dockerCommand.Path, "args", dockerCommand.Args)
 	if err := dockerCommand.Run(); err != nil {
 		return fmt.Errorf("Could not delete v3io-fuse container %s: %s", targetPath, err)
 	}
