@@ -171,8 +171,6 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 		// "/dev/infiniband/uverbs0",
 		"--restart",
 		"always",
-		"--cgroup-parent",
-		"/kubepods",
 		"--device",
 		"/dev/fuse",
 		"--net=host",
