@@ -166,7 +166,7 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 		"-v", "/etc/v3io/fuse:/etc/v3io/fuse",
 		"--name",
 		containerName,
-		// TODO: discover if infiniband exists and pass this
+		// TODO: discover if infiniband exists and pass this 
 		// "--device",
 		// "/dev/infiniband/uverbs0",
 		"--restart",
