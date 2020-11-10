@@ -169,8 +169,6 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 		// TODO: discover if infiniband exists and pass this
 		// "--device",
 		// "/dev/infiniband/uverbs0",
-		"--restart",
-		"on-failure",
 		"--cgroup-parent",
 		"/kubepods",
 		"--device",
