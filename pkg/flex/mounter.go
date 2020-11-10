@@ -170,7 +170,7 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 		// "--device",
 		// "/dev/infiniband/uverbs0",
 		"--restart",
-		"always",
+		"on-failure",
 		"--cgroup-parent",
 		"/kubepods",
 		"--device",
