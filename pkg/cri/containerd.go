@@ -3,6 +3,9 @@ package cri
 import (
 	"context"
 	"fmt"
+	"syscall"
+	"time"
+
 	"github.com/v3io/flex-fuse/pkg/journal"
 
 	"github.com/containerd/containerd"
@@ -73,6 +76,8 @@ func (c *Containerd) CreateContainer(image string,
 
 // RemoveContainer removes a container
 func (c *Containerd) RemoveContainer(containerName string) error {
+	journal.Debug("Removing container", "containerName", containerName)
+
 	container, err := c.containerdClient.LoadContainer(c.containerdContext, containerName)
 	if err != nil {
 		return err
@@ -80,22 +85,60 @@ func (c *Containerd) RemoveContainer(containerName string) error {
 
 	task, err := container.Task(c.containerdContext, cio.Load)
 	if err != nil {
+		journal.Debug("No task found for container, removing container",
+			"containerName", containerName)
+
 		return container.Delete(c.containerdContext)
 	}
+
+	journal.Debug("Got task for container",
+		"containerName", containerName,
+		"id", task.ID())
 
 	status, err := task.Status(c.containerdContext)
 	if err != nil {
 		return err
 	}
 
-	if status.Status == containerd.Stopped || status.Status == containerd.Created {
-		if _, err := task.Delete(c.containerdContext); err != nil {
-			return err
+	journal.Debug("Got task status for container",
+		"containerName", containerName,
+		"status", status.Status)
+
+	if status.Status != containerd.Stopped && status.Status != containerd.Created {
+		journal.Debug("Killing task", "containerName", containerName)
+
+		err = task.Kill(c.containerdContext,
+			syscall.SIGTERM,
+			containerd.WithKillAll)
+
+		if err != nil {
+			return fmt.Errorf("Failed killing %s's task: %s", containerName, err)
 		}
-		return container.Delete(c.containerdContext)
+
+		journal.Debug("Waiting for task to die", "containerName", containerName)
+
+		// wait for task to exit
+		taskExitStatusChan, err := task.Wait(c.containerdContext)
+		if err != nil {
+			return fmt.Errorf("Failed waiting for %s's task: %s", containerName, err)
+		}
+
+		select {
+		case exitStatus := <-taskExitStatusChan:
+			journal.Debug("Done waiting for task to exist",
+				"containerName", containerName, "exitStatus", exitStatus)
+		case <-time.After(20 * time.Second):
+			return fmt.Errorf("Timed out waiting for %s's task to exit", containerName)
+		}
 	}
 
-	return fmt.Errorf("cannot delete a non stopped container: %v", status)
+	if _, err := task.Delete(c.containerdContext); err != nil {
+		return fmt.Errorf("Failed to delete %s's task: %s", containerName, err)
+	}
+
+	journal.Debug("Task deleted, deleting container", "containerName", containerName)
+
+	return container.Delete(c.containerdContext)
 }
 
 func (c *Containerd) createContainer(image string,

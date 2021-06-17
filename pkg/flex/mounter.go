@@ -94,7 +94,7 @@ func (m *Mounter) createDirs(spec Spec, targetPath string) error {
 }
 
 func (m *Mounter) Unmount(targetPath string) *Response {
-	journal.Debug("Unmounting")
+	journal.Debug("Unmounting", "targetPath", targetPath)
 
 	if m.Config.Type == "link" {
 		return m.unmountAsLink(targetPath)
