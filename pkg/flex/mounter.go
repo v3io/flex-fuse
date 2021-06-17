@@ -3,6 +3,7 @@ package flex
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/v3io/flex-fuse/pkg/cri"
 	"os"
 	"os/exec"
 	"path"
@@ -103,7 +104,14 @@ func (m *Mounter) Unmount(targetPath string) *Response {
 		return NewSuccessResponse(fmt.Sprintf("%s Not a mountpoint, nothing to do", targetPath))
 	}
 
-	if err := m.removeV3IOFUSEContainer(targetPath); err != nil {
+	cri, err := createCRI()
+	if err != nil {
+		return NewFailResponse("Failed to create CRI", err)
+	}
+
+	defer cri.Close() // nolint: errcheck
+
+	if err := m.removeV3IOFUSEContainer(cri, targetPath); err != nil {
 		return NewFailResponse("Failed to remove v3io FUSE container", err)
 	}
 
@@ -134,6 +142,13 @@ func (m *Mounter) Unmount(targetPath string) *Response {
 func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 	journal.Info("Creating v3io-fuse container", "target", targetPath)
 
+	cri, err := createCRI()
+	if err != nil {
+		return err
+	}
+
+	defer cri.Close() // nolint: errcheck
+
 	ImageRepository := m.Config.ImageRepository
 	if ImageRepository == "" {
 		ImageRepository = "iguazio/v3io-fuse"
@@ -156,27 +171,11 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 
 	// Ensure the container doesn't already exist
 	// It's ok if the command runs but exits with a failure, this is in the case the container doesn't exist.
-	m.removeV3IOFUSEContainer(targetPath) // nolint: errcheck
+	m.removeV3IOFUSEContainer(cri, targetPath) // nolint: errcheck
 
 	// Create the new container
 	args := []string{
-		"run",
-		"--detach",
-		"--privileged",
-		"-v", "/etc/v3io/fuse:/etc/v3io/fuse",
-		"--name",
-		containerName,
-		// TODO: discover if infiniband exists and pass this
-		// "--device",
-		// "/dev/infiniband/uverbs0",
-		"--cgroup-parent",
-		"/kubepods",
-		"--device",
-		"/dev/fuse",
-		"--net=host",
-		"--mount",
-		fmt.Sprintf("type=bind,src=%s,target=/fuse_mount,bind-propagation=shared", targetPath),
-		fmt.Sprintf("%s:%s", ImageRepository, ImageTag),
+		"/fuse/mounter.sh",
 		"-o", "allow_other",
 		"--connection_strings", dataUrls,
 		"--mountpoint", "/fuse_mount",
@@ -195,14 +194,11 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 		}
 	}
 
-	dockerCommand := exec.Command("/usr/bin/docker", args...)
-
-	journal.Debug("Running docker run command", "path", dockerCommand.Path, "args", dockerCommand.Args)
-	if dockerCommandOutput, err := dockerCommand.CombinedOutput(); err != nil {
-		return fmt.Errorf("Failed to create v3io-fuse container %s: [%s] %s",
-			targetPath,
-			err.Error(),
-			string(dockerCommandOutput))
+	if err := cri.CreateContainer(fmt.Sprintf("%s:%s", ImageRepository, ImageTag),
+		containerName,
+		targetPath,
+		args); err != nil {
+		return fmt.Errorf("Failed to create container for %s: %s", targetPath, err)
 	}
 
 	for _, interval := range []time.Duration{1, 2, 4, 2, 1} {
@@ -216,7 +212,7 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 	return fmt.Errorf("Failed to mount %s due to timeout", targetPath)
 }
 
-func (m *Mounter) removeV3IOFUSEContainer(targetPath string) error {
+func (m *Mounter) removeV3IOFUSEContainer(cri cri.CRI, targetPath string) error {
 	journal.Info("Removing v3io-fuse container", "target", targetPath)
 
 	containerName, err := getContainerNameFromTargetPath(targetPath)
@@ -224,17 +220,8 @@ func (m *Mounter) removeV3IOFUSEContainer(targetPath string) error {
 		return fmt.Errorf("Could not get container name: %s", err)
 	}
 
-	args := []string{
-		"rm",
-		"--force",
-		containerName,
-	}
-
-	dockerCommand := exec.Command("/usr/bin/docker", args...)
-
-	journal.Debug("Running docker rm command", "path", dockerCommand.Path, "args", dockerCommand.Args)
-	if err := dockerCommand.Run(); err != nil {
-		return fmt.Errorf("Could not delete v3io-fuse container %s: %s", targetPath, err)
+	if err := cri.RemoveContainer(containerName); err != nil {
+		return fmt.Errorf("Could not remove container for %s: %s", targetPath, err)
 	}
 
 	journal.Debug("Container removed", "containerName", containerName)
@@ -320,4 +307,15 @@ func isMountPoint(path string) bool {
 	}
 
 	return result
+}
+
+func createCRI() (cri.CRI, error) {
+	dockerBinaryPath := "/usr/bin/docker"
+
+	// if docker binary exists, create docker. otherwise containerd
+	if _, err := os.Stat(dockerBinaryPath); os.IsNotExist(err) {
+		return cri.NewContainerd("/run/containerd/containerd.sock", "v3io")
+	}
+
+	return cri.NewDocker(dockerBinaryPath)
 }
