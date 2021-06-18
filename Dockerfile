@@ -1,19 +1,20 @@
-FROM golang:1.10.3 as builder
+FROM golang:1.16 as builder
 
-ENV GOPATH=/go
-ENV PROJECT_PATH=${GOPATH}/src/github.com/v3io/flex-fuse
+ENV PROJECT_PATH=/flex-fuse
 
 COPY cmd ${PROJECT_PATH}/cmd
 COPY pkg ${PROJECT_PATH}/pkg
-COPY vendor ${PROJECT_PATH}/vendor
+COPY go.mod ${PROJECT_PATH}/go.mod
+COPY go.sum ${PROJECT_PATH}/go.sum
 
-RUN go build -o ${GOPATH}/fuse ${PROJECT_PATH}/cmd/fuse/main.go
+WORKDIR ${PROJECT_PATH}
+RUN go build -o /fuse ${PROJECT_PATH}/cmd/fuse/main.go
 
 FROM alpine:3.6
 
 COPY hack/scripts/deploy.sh /usr/local/bin
 COPY hack/scripts/install.sh /install.sh
 COPY hack/libs /libs
-COPY --from=builder /go/fuse /fuse
+COPY --from=builder /fuse /fuse
 
 CMD ["/bin/ash","/usr/local/bin/deploy.sh"]
