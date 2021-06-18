@@ -166,7 +166,7 @@ func (c *Containerd) createContainer(image string,
 		{
 			Destination: "/etc/v3io/fuse",
 			Type:        "bind",
-			Source:      "/home/iguazio/fuse/etc",
+			Source:      "/etc/v3io/fuse",
 			Options:     []string{"rbind", "ro"},
 		},
 		{
