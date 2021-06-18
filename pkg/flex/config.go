@@ -14,14 +14,14 @@ const (
 )
 
 type Config struct {
-	ImageRepository  string          `json:"image_repository"`
-	ImageTag         string          `json:"image_tag"`
-	RootPath         string          `json:"root_path"`
-	FusePath         string          `json:"fuse_path"`
-	Debug            bool            `json:"debug"`
-	Type             string          `json:"type"`
-	Clusters         []ClusterConfig `json:"clusters"`
-	V3ioConfigPath   string          `json:"v3io_config_path"`
+	ImageRepository string          `json:"image_repository"`
+	ImageTag        string          `json:"image_tag"`
+	RootPath        string          `json:"root_path"`
+	FusePath        string          `json:"fuse_path"`
+	Debug           bool            `json:"debug"`
+	Type            string          `json:"type"`
+	Clusters        []ClusterConfig `json:"clusters"`
+	V3ioConfigPath  string          `json:"v3io_config_path"`
 }
 
 func NewConfig() (*Config, error) {
