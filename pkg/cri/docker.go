@@ -44,9 +44,9 @@ func (d *Docker) CreateContainer(image string,
 	dockerCommandArgs = append(dockerCommandArgs, args[1:]...)
 
 	// execute the command
-	dockerCommand := exec.Command(d.dockerBinaryPath, args...)
+	dockerCommand := exec.Command(d.dockerBinaryPath, dockerCommandArgs...)
 
-	journal.Debug("Running docker run command", "path", dockerCommand.Path, "args", dockerCommand.Args)
+	journal.Debug("Executing docker run command", "path", dockerCommand.Path, "args", dockerCommand.Args)
 	if dockerCommandOutput, err := dockerCommand.CombinedOutput(); err != nil {
 		return fmt.Errorf("Failed to create v3io-fuse container %s: [%s] %s",
 			targetPath,
@@ -67,7 +67,7 @@ func (d *Docker) RemoveContainer(containerName string) error {
 
 	dockerCommand := exec.Command(d.dockerBinaryPath, args...)
 
-	journal.Debug("Running docker rm command", "path", dockerCommand.Path, "args", dockerCommand.Args)
+	journal.Debug("Executing docker rm command", "path", dockerCommand.Path, "args", dockerCommand.Args)
 	if err := dockerCommand.Run(); err != nil {
 		return err
 	}
