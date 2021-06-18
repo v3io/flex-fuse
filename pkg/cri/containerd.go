@@ -3,6 +3,8 @@ package cri
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"strings"
 	"syscall"
 	"time"
 
@@ -10,7 +12,6 @@ import (
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
-	"github.com/containerd/containerd/cmd/ctr/commands/tasks"
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
@@ -48,21 +49,24 @@ func (c *Containerd) CreateContainer(image string,
 	targetPath string,
 	args []string) error {
 
+	// get the path to a log file
+	logFilePath, err := c.getLogFilePath(containerName, targetPath)
+	if err != nil {
+		return err
+	}
+
+	journal.Debug("Creating log file",
+		"containerName", containerName,
+		"targetPath", targetPath,
+		"logFilePath", logFilePath)
+
 	v3ioFUSEContainer, err := c.createContainer(image, containerName, targetPath, args)
 	if err != nil {
 		return err
 	}
 
 	// create the actual process
-	v3ioFUSETask, err := tasks.NewTask(c.containerdContext,
-		c.containerdClient,
-		v3ioFUSEContainer,
-		"",
-		nil,
-		false,
-		"",
-		[]cio.Opt{})
-
+	v3ioFUSETask, err := v3ioFUSEContainer.NewTask(c.containerdContext, cio.LogFile(logFilePath))
 	if err != nil {
 		return err
 	}
@@ -191,16 +195,34 @@ func (c *Containerd) createContainer(image string,
 
 	var spec specs.Spec
 
+	snapshotterName := "overlayfs"
+
+	// before creating, try to delete the snapshot if it exists - otherwise it'll fail
+	c.containerdClient.SnapshotService(snapshotterName).Remove(c.containerdContext, containerName)
+
 	return c.containerdClient.NewContainer(
 		c.containerdContext,
 		containerName,
 		containerd.WithImage(v3ioFUSEImage),
-		containerd.WithSnapshotter("overlayfs"),
+		containerd.WithSnapshotter(snapshotterName),
 		containerd.WithNewSnapshot(containerName, v3ioFUSEImage),
 		containerd.WithImageStopSignal(v3ioFUSEImage, "SIGTERM"),
 		containerd.WithRuntime("io.containerd.runc.v2", nil),
 		containerd.WithSpec(&spec, options...),
 	)
+}
+
+func (c *Containerd) getLogFilePath(containerName string, targetPath string) (string, error) {
+	sanitizedTargetPath := strings.Replace(targetPath, "/", "-", -1)
+
+	logFile, err := ioutil.TempFile("", fmt.Sprintf("%s-%s-", containerName, sanitizedTargetPath))
+	if err != nil {
+		return "", err
+	}
+
+	defer logFile.Close()
+
+	return logFile.Name(), nil
 }
 
 func withRootfsPropagation(_ context.Context, _ oci.Client, _ *containers.Container, s *oci.Spec) error {
