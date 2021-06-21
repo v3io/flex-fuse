@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"path"
 	"strings"
 	"syscall"
 	"time"
@@ -190,6 +191,7 @@ func (c *Containerd) createContainer(image string,
 		oci.WithHostHostsFile,
 		oci.WithHostResolvconf,
 		oci.WithDevices("/dev/fuse", "", "rwm"),
+		withCgroupParent("/kubepods"),
 		withRootfsPropagation,
 	}
 
@@ -228,4 +230,12 @@ func (c *Containerd) getLogFilePath(containerName string, targetPath string) (st
 func withRootfsPropagation(_ context.Context, _ oci.Client, _ *containers.Container, s *oci.Spec) error {
 	s.Linux.RootfsPropagation = "shared"
 	return nil
+}
+
+func withCgroupParent(cgroupParentPath string) oci.SpecOpts {
+	return func(_ context.Context, _ oci.Client, c *containers.Container, s *oci.Spec) error {
+		s.Linux.CgroupsPath = path.Join(cgroupParentPath, c.ID)
+
+		return nil
+	}
 }
