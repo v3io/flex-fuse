@@ -49,7 +49,7 @@ func handleAction() *flex.Response {
 		return mounter.Unmount(os.Args[2])
 
 	default:
-		return getArgumentFailResponse("Received action is not supported")
+		return getArgumentFailResponse(fmt.Sprintf("Received (%s) action is not supported", action))
 	}
 }
 

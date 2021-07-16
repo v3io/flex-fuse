@@ -7,8 +7,8 @@ import (
 )
 
 type DirToCreate struct {
-	Name              string `json:"name"`
-	Permissions       os.FileMode `json:"permissions"`
+	Name        string      `json:"name"`
+	Permissions os.FileMode `json:"permissions"`
 }
 
 type Spec struct {

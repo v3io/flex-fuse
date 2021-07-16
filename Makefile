@@ -9,7 +9,7 @@ DEB_PATH = "iguazio_deb"
 
 .PHONY: build
 build:
-	docker build --tag flex-fuse:unstable .
+	docker build --progress=plain --tag flex-fuse:unstable .
 
 .PHONY: download
 download:
