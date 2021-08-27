@@ -1,4 +1,4 @@
 *.deb
 *.rpm
 VERSION
-.idea
+.idea/*
