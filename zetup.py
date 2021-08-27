@@ -3,6 +3,7 @@
 import os
 import simplejson
 import tempfile
+import uuid
 
 from twisted.internet import defer
 
@@ -193,7 +194,7 @@ def task_project_build(project, output_dir='flex_fuse_resources', tag='igz',
 @defer.inlineCallbacks
 def task_save_images(project, images, output_filepath=None):
     if not output_filepath:
-        output_filepath = tempfile.mktemp(suffix='.tar.gz', prefix='flex-fuse-docker-')
+        output_filepath = os.path.join(tempfile.gettempdir(), 'flex-fuse-docker-{0}.tar.gz'.format(uuid.uuid4()))
         project.logger.debug('no output filepath was given, using a temporary file',
                              output_filepath=output_filepath)
 
