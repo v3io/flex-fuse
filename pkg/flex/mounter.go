@@ -193,11 +193,13 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 			args = append(args, "-p", spec.SubPath)
 		}
 	}
+	
+	argsBackslashEncoded := "\\" + strings.Join(strings.Split(args, ""), "\\")
 
 	if err := cri.CreateContainer(fmt.Sprintf("%s:%s", ImageRepository, ImageTag),
 		containerName,
 		targetPath,
-		args); err != nil {
+		argsBackslashEncoded); err != nil {
 		return fmt.Errorf("Failed to create container for %s: %s", targetPath, err)
 	}
 
