@@ -188,9 +188,11 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 	}
 
 	if spec.Container != "" {
-		args = append(args, "-a", spec.Container)
+		containerBackslashEncoded := "\\" + strings.Join(strings.Split(spec.Container, ""), "\\")
+		args = append(args, "-a", containerBackslashEncoded)
 		if spec.SubPath != "" {
-			args = append(args, "-p", spec.SubPath)
+			subPathBackslashEncoded := "\\" + strings.Join(strings.Split(spec.SubPath, ""), "\\")
+			args = append(args, "-p", subPathBackslashEncoded)
 		}
 	}
 
