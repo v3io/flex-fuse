@@ -199,7 +199,7 @@ func (c *Containerd) createContainer(image string,
 		oci.WithHostHostsFile,
 		oci.WithHostResolvconf,
 		oci.WithDevices("/dev/fuse", "", "rwm"),
-		withCgroupParent("/kubepods.slice"),
+		withCgroupParent("kubepods.slice"),
 		withRootfsPropagation,
 	}
 
