@@ -159,7 +159,7 @@ func (c *Containerd) createContainer(image string,
 		"targetPath", targetPath,
 		"args", args)
 
-	// assume image exist
+	// assume image exists
 	v3ioFUSEImage, err := c.containerdClient.GetImage(c.containerdContext, image)
 	if err != nil {
 		journal.Debug("Image does not exist, pulling",
