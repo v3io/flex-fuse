@@ -151,7 +151,7 @@ func (c *Containerd) createContainer(image string,
 	targetPath string,
 	args []string) (containerd.Container, error) {
 
-    args = append(args," 2>&1 | multilog s16777215 n20 /var/log/containers/flex-fuse-`cat /proc/self/cgroup |  grep memory | awk -F  \"/\"  '{print $NF}'`")
+	args = append(args, " 2>&1 | multilog s16777215 n20 /var/log/containers/flex-fuse-`cat /proc/self/cgroup |  grep memory | awk -F  \"/\"  '{print $NF}'`")
 
 	journal.Debug("Creating container",
 		"image", image,
@@ -159,10 +159,20 @@ func (c *Containerd) createContainer(image string,
 		"targetPath", targetPath,
 		"args", args)
 
-	// pull the v3io-fuse image
-	v3ioFUSEImage, err := c.containerdClient.Pull(c.containerdContext, image, containerd.WithPullUnpack)
+	// assume image exist
+	v3ioFUSEImage, err := c.containerdClient.GetImage(c.containerdContext, image)
 	if err != nil {
-		return nil, err
+		journal.Debug("Image does not exist, pulling",
+			"containerName", containerName,
+			"image", image)
+
+		// pull the v3io-fuse image
+		v3ioFUSEImage, err = c.containerdClient.Pull(c.containerdContext,
+			image,
+			containerd.WithPullUnpack)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	mounts := []specs.Mount{
