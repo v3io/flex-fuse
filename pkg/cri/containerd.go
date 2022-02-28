@@ -276,7 +276,6 @@ func (c *Containerd) tryImportFromK8sNamespace(imageName string) ([]images.Image
 	var imageInstance containerd.Image
 	var importedImages []images.Image
 
-	// TODO: retry until successful
 	err = common.RetryFunc(c.containerdContext,
 		10,
 		3*time.Second,
