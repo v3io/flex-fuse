@@ -104,14 +104,14 @@ func (m *Mounter) Unmount(targetPath string) *Response {
 		return NewSuccessResponse(fmt.Sprintf("%s Not a mountpoint, nothing to do", targetPath))
 	}
 
-	cri, err := createCRI()
+	criInstance, err := createCRI()
 	if err != nil {
 		return NewFailResponse("Failed to create CRI", err)
 	}
 
-	defer cri.Close() // nolint: errcheck
+	defer criInstance.Close() // nolint: errcheck
 
-	if err := m.removeV3IOFUSEContainer(cri, targetPath); err != nil {
+	if err := m.removeV3IOFUSEContainer(criInstance, targetPath); err != nil {
 		return NewFailResponse("Failed to remove v3io FUSE container", err)
 	}
 
@@ -142,12 +142,12 @@ func (m *Mounter) Unmount(targetPath string) *Response {
 func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 	journal.Info("Creating v3io-fuse container", "target", targetPath)
 
-	cri, err := createCRI()
+	criInstance, err := createCRI()
 	if err != nil {
 		return err
 	}
 
-	defer cri.Close() // nolint: errcheck
+	defer criInstance.Close() // nolint: errcheck
 
 	ImageRepository := m.Config.ImageRepository
 	if ImageRepository == "" {
@@ -171,7 +171,7 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 
 	// Ensure the container doesn't already exist
 	// It's ok if the command runs but exits with a failure, this is in the case the container doesn't exist.
-	m.removeV3IOFUSEContainer(cri, targetPath) // nolint: errcheck
+	m.removeV3IOFUSEContainer(criInstance, targetPath) // nolint: errcheck
 
 	// Create the new container
 	args := []string{
@@ -196,7 +196,7 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 		}
 	}
 
-	if err := cri.CreateContainer(fmt.Sprintf("%s:%s", ImageRepository, ImageTag),
+	if err := criInstance.CreateContainer(fmt.Sprintf("%s:%s", ImageRepository, ImageTag),
 		containerName,
 		targetPath,
 		args); err != nil {
@@ -214,7 +214,7 @@ func (m *Mounter) createV3IOFUSEContainer(spec *Spec, targetPath string) error {
 	return fmt.Errorf("Failed to mount %s due to timeout", targetPath)
 }
 
-func (m *Mounter) removeV3IOFUSEContainer(cri cri.CRI, targetPath string) error {
+func (m *Mounter) removeV3IOFUSEContainer(criInstance cri.CRI, targetPath string) error {
 	journal.Info("Removing v3io-fuse container", "target", targetPath)
 
 	containerName, err := getContainerNameFromTargetPath(targetPath)
@@ -222,7 +222,7 @@ func (m *Mounter) removeV3IOFUSEContainer(cri cri.CRI, targetPath string) error 
 		return fmt.Errorf("Could not get container name: %s", err)
 	}
 
-	if err := cri.RemoveContainer(containerName); err != nil {
+	if err := criInstance.RemoveContainer(containerName); err != nil {
 		return fmt.Errorf("Could not remove container for %s: %s", targetPath, err)
 	}
 
