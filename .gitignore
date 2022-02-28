@@ -2,5 +2,10 @@
 *.rpm
 VERSION
 .idea/*
+
+# we store stuff on hack/libs during build
 hack/libs
+
+# we want to preserve the gitkeep because git by default to track empty directories
+# https://stackoverflow.com/questions/7229885/what-are-the-differences-between-gitignore-and-gitkeep
 !hack/libs/.gitkeep
