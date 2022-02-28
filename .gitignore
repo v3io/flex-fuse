@@ -3,3 +3,4 @@
 VERSION
 .idea/*
 hack/libs
+!hack/libs/.gitkeep
