@@ -2,3 +2,4 @@
 *.rpm
 VERSION
 .idea/*
+hack/libs
