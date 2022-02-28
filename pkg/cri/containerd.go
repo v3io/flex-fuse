@@ -1,19 +1,24 @@
 package cri
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
 	"path"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/v3io/flex-fuse/pkg/common"
 	"github.com/v3io/flex-fuse/pkg/journal"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/containers"
+	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/images/archive"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -21,6 +26,7 @@ import (
 
 type Containerd struct {
 	containerdContext context.Context
+	kubernetesContext context.Context
 	containerdClient  *containerd.Client
 }
 
@@ -36,6 +42,9 @@ func NewContainerd(containerdSock string, contextName string) (*Containerd, erro
 
 	// specify a namespace
 	newContainerd.containerdContext = namespaces.WithNamespace(context.Background(), contextName)
+
+	// kubernetes namespace
+	newContainerd.kubernetesContext = namespaces.WithNamespace(context.Background(), "k8s.io")
 
 	return &newContainerd, nil
 }
@@ -159,6 +168,22 @@ func (c *Containerd) createContainer(image string,
 		"targetPath", targetPath,
 		"args", args)
 
+	// try to get image from k8s namespace
+	importedImages, err := c.tryImportFromK8sNamespace(image)
+	if err != nil {
+		journal.Debug("Failed to import image from k8s namespace. Error: " + err.Error())
+	} else {
+		journal.Debug("Successfully imported image from k8s namespace",
+			"containerName", containerName,
+			"lenImportedImages", strconv.Itoa(len(importedImages)),
+			"currentImageName", image)
+
+		// override image
+		if len(importedImages) > 0 {
+			image = importedImages[0].Name
+		}
+	}
+
 	// assume image exists
 	v3ioFUSEImage, err := c.containerdClient.GetImage(c.containerdContext, image)
 	if err != nil {
@@ -243,6 +268,84 @@ func (c *Containerd) getLogFilePath(containerName string, targetPath string) (st
 	defer logFile.Close()
 
 	return logFile.Name(), nil
+}
+
+func (c *Containerd) tryImportFromK8sNamespace(imageName string) ([]images.Image, error) {
+	var buf bytes.Buffer
+	var err error
+	var imageInstance containerd.Image
+	var importedImages []images.Image
+
+	// TODO: retry until successful
+	err = common.RetryFunc(c.containerdContext,
+		10,
+		3*time.Second,
+		func(attempt int) (bool, error) {
+
+			// make sure image is on k8s namespace
+			imageInstance, err = c.containerdClient.GetImage(
+				c.kubernetesContext,
+				imageName,
+			)
+			if err != nil {
+				journal.Debug("Failed to find image in k8s namespace, retrying",
+					"attempt", attempt,
+					"err", err.Error())
+				return true, err
+			}
+
+			// reset buffer for next retry, if needed at all
+			defer buf.Reset()
+
+			// export from k8s context
+			if err = c.containerdClient.Export(
+				c.kubernetesContext,
+				&buf,
+				archive.WithImage(c.containerdClient.ImageService(), imageInstance.Name()),
+			); err != nil {
+
+				// exported failed - try again
+				journal.Debug("Failed to export image from k8s namespace, retrying",
+					"attempt", attempt,
+					"err", err.Error())
+				return true, err
+			}
+
+			// import to current containerd context
+			importedImages, err = c.containerdClient.Import(c.containerdContext, &buf)
+			if err != nil {
+
+				// import failed, try again
+				journal.Debug("Failed to import image to running namespace, retrying",
+					"attempt", attempt,
+					"err", err.Error())
+				return true, err
+			}
+
+			// get imported image
+			imageInstance, err = c.containerdClient.GetImage(
+				c.containerdContext,
+				imageName,
+			)
+			if err != nil {
+				journal.Debug("Failed to find image in running namespace, retrying",
+					"attempt", attempt,
+					"err", err.Error())
+				return true, err
+			}
+
+			// unpack imported
+			if err = imageInstance.Unpack(c.containerdContext, ""); err != nil {
+				journal.Debug("Failed to unpack imported image in running namespace, retrying",
+					"attempt", attempt,
+					"err", err.Error())
+				return true, err
+			}
+
+			return false, nil
+		})
+
+	return importedImages, err
 }
 
 func withRootfsPropagation(_ context.Context, _ oci.Client, _ *containers.Container, s *oci.Spec) error {
