@@ -1,11 +1,13 @@
-SRC_BINARY_NAME ?= "igz-fuse"
-DST_BINARY_NAME ?= "igz-fuse"
-FETCH_METHOD ?= "download"
+SRC_BINARY_NAME ?= igz-fuse
+DST_BINARY_NAME ?= igz-fuse
+FETCH_METHOD ?= download
 MIRROR ?=
 IGUAZIO_VERSION ?=
+NAS_IP ?=
+NAS_PASSWORD ?=
 
-RPM_PATH = "iguazio_yum"
-DEB_PATH = "iguazio_deb"
+RPM_PATH = iguazio_yum
+DEB_PATH = iguazio_deb
 
 .PHONY: build
 build:
@@ -16,6 +18,15 @@ download:
 	rm -rf hack/libs/${DST_BINARY_NAME}*
 	wget --quiet $(MIRROR)/$(RPM_PATH)/$(IGUAZIO_VERSION)/$(SRC_BINARY_NAME).rpm -O hack/libs/$(DST_BINARY_NAME).rpm
 	#wget --quiet $(MIRROR)/$(DEB_PATH)/$(IGUAZIO_VERSION)/$(SRC_BINARY_NAME).deb -O hack/libs/$(DST_BINARY_NAME).deb
+	touch hack/libs/$(IGUAZIO_VERSION)
+
+.PHONY: download-rsync
+download-rsync:
+	rm -rf hack/libs/${DST_BINARY_NAME}*
+	rsync -avz \
+		--rsh="sshpass -p $(NAS_PASSWORD) ssh -o StrictHostKeyChecking=no -l iguazio" \
+ 		iguazio@$(NAS_IP):/mnt/ztank01/nfs/offline_versions/$(IGUAZIO_VERSION)/deploy/artifacts/zeek-packages/$(SRC_BINARY_NAME).rpm \
+ 		hack/libs/$(DST_BINARY_NAME).rpm
 	touch hack/libs/$(IGUAZIO_VERSION)
 
 .PHONY: copy

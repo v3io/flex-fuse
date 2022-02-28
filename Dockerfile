@@ -2,13 +2,19 @@ FROM golang:1.16 as builder
 
 ENV PROJECT_PATH=/flex-fuse
 
-COPY cmd ${PROJECT_PATH}/cmd
-COPY pkg ${PROJECT_PATH}/pkg
-COPY go.mod ${PROJECT_PATH}/go.mod
-COPY go.sum ${PROJECT_PATH}/go.sum
-
 WORKDIR ${PROJECT_PATH}
-RUN go build -o /fuse ${PROJECT_PATH}/cmd/fuse/main.go
+
+# copy `go.mod` for definitions and `go.sum` to invalidate the next layer
+# in case of a change in the dependencies
+COPY go.mod go.sum ./
+
+RUN go mod download
+
+# copy source tree
+COPY ./pkg ./pkg
+COPY ./cmd ./cmd
+
+RUN go build -o /fuse cmd/fuse/main.go
 
 FROM alpine:3.6
 
