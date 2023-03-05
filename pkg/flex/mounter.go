@@ -314,7 +314,7 @@ func isMountPoint(path string) bool {
 func createCRI() (cri.CRI, error) {
 	dockerBinaryPath := "/usr/bin/docker"
 
-	// if docker binary exists, create docker. otherwise containerd
+	// if docker binary does not exist, use containerd
 	if _, err := os.Stat(dockerBinaryPath); os.IsNotExist(err) {
 		return cri.NewContainerd("/run/containerd/containerd.sock", "v3io")
 	}
