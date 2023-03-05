@@ -31,7 +31,7 @@ func NewMounter() (*Mounter, error) {
 }
 
 func (m *Mounter) Mount(targetPath string, specString string) *Response {
-	journal.Debug("Mounting")
+	journal.Debug("Mounting", "targetPath", targetPath)
 
 	spec := Spec{}
 	if err := json.Unmarshal([]byte(specString), &spec); err != nil {
@@ -314,8 +314,15 @@ func isMountPoint(path string) bool {
 func createCRI() (cri.CRI, error) {
 	dockerBinaryPath := "/usr/bin/docker"
 
-	// if docker binary exists, create docker. otherwise containerd
+	// if docker binary does not exist, use containerd
 	if _, err := os.Stat(dockerBinaryPath); os.IsNotExist(err) {
+		return cri.NewContainerd("/run/containerd/containerd.sock", "v3io")
+	}
+
+	// NOTE: On some managed kubernetes services, docker is installed but not activated
+	// while containerd is the CRI runtime. In this case, we want to use containerd.
+	// if docker binary exists, has systemd unit but is not running, create containerd.
+	if exec.Command("systemctl", "is-active", "docker").Run() != nil {
 		return cri.NewContainerd("/run/containerd/containerd.sock", "v3io")
 	}
 
