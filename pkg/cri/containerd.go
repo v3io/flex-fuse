@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"os/exec"
 	"path"
 	"strconv"
 	"strings"
@@ -234,7 +235,7 @@ func (c *Containerd) createContainer(image string,
 		oci.WithHostHostsFile,
 		oci.WithHostResolvconf,
 		oci.WithDevices("/dev/fuse", "", "rwm"),
-		withCgroupParent("/kubepods"),
+		withCgroupParent(getCgroupParent()),
 		withRootfsPropagation,
 	}
 
@@ -357,5 +358,17 @@ func withCgroupParent(cgroupParentPath string) oci.SpecOpts {
 		s.Linux.CgroupsPath = path.Join(cgroupParentPath, c.ID)
 
 		return nil
+	}
+}
+func getCgroupParent() string {
+	cmd := exec.Command("stat", "-fc", "%T", "/sys/fs/cgroup/")
+	out, err := cmd.Output()
+	if err != nil {
+		return "/kubepods"
+	}
+	if strings.TrimSpace(string(out)) == "cgroup2fs" {
+		return "/kubepods.slice"
+	} else {
+		return "/kubepods"
 	}
 }
