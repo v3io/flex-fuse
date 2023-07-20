@@ -161,7 +161,7 @@ func (c *Containerd) createContainer(image string,
 	targetPath string,
 	args []string) (containerd.Container, error) {
 
-	args = append(args, " 2>&1 | multilog s16777215 n20 /var/log/containers/flex-fuse-`cat /proc/self/cgroup |  grep memory | awk -F  \"/\"  '{print $NF}'`")
+	args = append(args, " 2>&1 | multilog s16777215 n20 /var/log/containers/flex-fuse-`cat /proc/self/cgroup |  head -n 1 | awk -F  \"/\"  '{print $NF}'`")
 
 	journal.Debug("Creating container",
 		"image", image,
