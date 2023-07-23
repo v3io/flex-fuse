@@ -23,13 +23,14 @@ package flex
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/v3io/flex-fuse/pkg/cri"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/v3io/flex-fuse/pkg/cri"
 
 	"github.com/v3io/flex-fuse/pkg/journal"
 )
@@ -342,9 +343,19 @@ func createCRI() (cri.CRI, error) {
 	// NOTE: On some managed kubernetes services, docker is installed but not activated
 	// while containerd is the CRI runtime. In this case, we want to use containerd.
 	// if docker binary exists, has systemd unit but is not running, create containerd.
-	if exec.Command("systemctl", "is-active", "docker").Run() != nil {
+	if notRunningDocker() {
 		return cri.NewContainerd("/run/containerd/containerd.sock", "v3io")
 	}
 
 	return cri.NewDocker(dockerBinaryPath)
+}
+
+func notRunningDocker() bool {
+	cmd := exec.Command("sh", "-c", "ps -ef | grep kubelet | grep container-runtime | grep -q docker")
+	out, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	outStr := strings.TrimSpace(string(out))
+	return outStr == ""
 }

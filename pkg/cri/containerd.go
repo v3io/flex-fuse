@@ -24,6 +24,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"os/exec"
 	"path"
 	"strconv"
 	"strings"
@@ -179,7 +180,7 @@ func (c *Containerd) createContainer(image string,
 	targetPath string,
 	args []string) (containerd.Container, error) {
 
-	args = append(args, " 2>&1 | multilog s16777215 n20 /var/log/containers/flex-fuse-`cat /proc/self/cgroup |  grep memory | awk -F  \"/\"  '{print $NF}'`")
+	args = append(args, " 2>&1 | multilog s16777215 n20 /var/log/containers/flex-fuse-`cat /proc/self/cgroup |  head -n 1 | awk -F  \"/\"  '{print $NF}'`")
 
 	journal.Debug("Creating container",
 		"image", image,
@@ -253,7 +254,7 @@ func (c *Containerd) createContainer(image string,
 		oci.WithHostHostsFile,
 		oci.WithHostResolvconf,
 		oci.WithDevices("/dev/fuse", "", "rwm"),
-		withCgroupParent("/kubepods"),
+		withCgroupParent(getCgroupParent()),
 		withRootfsPropagation,
 	}
 
@@ -376,5 +377,17 @@ func withCgroupParent(cgroupParentPath string) oci.SpecOpts {
 		s.Linux.CgroupsPath = path.Join(cgroupParentPath, c.ID)
 
 		return nil
+	}
+}
+func getCgroupParent() string {
+	cmd := exec.Command("stat", "-fc", "%T", "/sys/fs/cgroup/")
+	out, err := cmd.Output()
+	if err != nil {
+		return "/kubepods"
+	}
+	if strings.TrimSpace(string(out)) == "cgroup2fs" {
+		return "/kubepods.slice"
+	} else {
+		return "/kubepods"
 	}
 }
