@@ -161,25 +161,7 @@ func (c *Containerd) createContainer(image string,
 	targetPath string,
 	args []string) (containerd.Container, error) {
 
-	// The log file name contains the container-ID which appears in /proc/self/cgroup file as a sequence of 64 hexadecimal digits
-	// root@gke-zd-gke1-app-clust-zd-gke1-initial-7b135c73-jxn0:/#  cat /proc/self/cgroup
-	// 13:misc:/
-	// 12:rdma:/
-	// 11:memory:/kubepods/besteffort/pod0404f9f9-7e8f-4cf0-848a-a7a23ef63393/466f13d55e758cf1e969744007435e2eb3d48f4d64f81fa7f2c2c7ac14690c23
-	// 10:freezer:/kubepods/besteffort/pod0404f9f9-7e8f-4cf0-848a-a7a23ef63393/466f13d55e758cf1e969744007435e2eb3d48f4d64f81fa7f2c2c7ac14690c23
-	// 9:cpuset:/kubepods/besteffort/pod0404f9f9-7e8f-4cf0-848a-a7a23ef63393/466f13d55e758cf1e969744007435e2eb3d48f4d64f81fa7f2c2c7ac14690c23
-	// 8:pids:/kubepods/besteffort/pod0404f9f9-7e8f-4cf0-848a-a7a23ef63393/466f13d55e758cf1e969744007435e2eb3d48f4d64f81fa7f2c2c7ac14690c23
-	// 7:blkio:/kubepods/besteffort/pod0404f9f9-7e8f-4cf0-848a-a7a23ef63393/466f13d55e758cf1e969744007435e2eb3d48f4d64f81fa7f2c2c7ac14690c23
-	// 6:perf_event:/kubepods/besteffort/pod0404f9f9-7e8f-4cf0-848a-a7a23ef63393/466f13d55e758cf1e969744007435e2eb3d48f4d64f81fa7f2c2c7ac14690c23
-	// 5:net_cls,net_prio:/kubepods/besteffort/pod0404f9f9-7e8f-4cf0-848a-a7a23ef63393/466f13d55e758cf1e969744007435e2eb3d48f4d64f81fa7f2c2c7ac14690c23
-	// 4:cpu,cpuacct:/kubepods/besteffort/pod0404f9f9-7e8f-4cf0-848a-a7a23ef63393/466f13d55e758cf1e969744007435e2eb3d48f4d64f81fa7f2c2c7ac14690c23
-	// 3:devices:/kubepods/besteffort/pod0404f9f9-7e8f-4cf0-848a-a7a23ef63393/466f13d55e758cf1e969744007435e2eb3d48f4d64f81fa7f2c2c7ac14690c23
-	// 2:hugetlb:/kubepods/besteffort/pod0404f9f9-7e8f-4cf0-848a-a7a23ef63393/466f13d55e758cf1e969744007435e2eb3d48f4d64f81fa7f2c2c7ac14690c23
-	// 1:name=systemd:/kubepods/besteffort/pod0404f9f9-7e8f-4cf0-848a-a7a23ef63393/466f13d55e758cf1e969744007435e2eb3d48f4d64f81fa7f2c2c7ac14690c23
-	// 0::/system.slice/containerd.service
-	// root@gke-zd-gke1-app-clust-zd-gke1-initial-7b135c73-jxn0:/#
-
-	args = append(args, " 2>&1 | multilog s16777215 n20 /var/log/containers/flex-fuse-`cat /proc/self/cgroup | awk 'match($0, /[0-9a-fA-F]{64}/) { if (RSTART > 0) { print substr($0, RSTART, RLENGTH); exit; } }'`")
+	args = append(args, " 2>&1 | multilog s16777215 n20 /var/log/containers/flex-fuse-`cat /proc/self/cgroup |  head -n 1 | awk -F  \"/\"  '{print $NF}'`")
 
 	journal.Debug("Creating container",
 		"image", image,
