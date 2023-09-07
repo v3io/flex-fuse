@@ -180,7 +180,25 @@ func (c *Containerd) createContainer(image string,
 	targetPath string,
 	args []string) (containerd.Container, error) {
 
-	args = append(args, " 2>&1 | multilog s16777215 n20 /var/log/containers/flex-fuse-`cat /proc/self/cgroup |  head -n 1 | awk -F  \"/\"  '{print $NF}'`")
+	// The log filename incorporates the container-ID found in the `/proc/self/cgroup` file.
+	// Specifically, we're scanning for a character sequence longer than 32 characters that appears after the last '/'.
+	// If such a sequence isn't located, we use the term 'random'.
+	// Additionally, a random number is appended to the end of the filename.
+	// Here are examples of such cgroup files:
+	// root@gke-zd-gke1-app-clust-zd-gke1-initial-7b135c73-jxn0:/#  cat /proc/self/cgroup
+	// 13:misc:/
+	// 12:rdma:/
+	// 11:memory:/kubepods/besteffort/pod0404f9f9-7e8f-4cf0-848a-a7a23ef63393/466f13d55e758cf1e969744007435e2eb3d48f4d64f81fa7f2c2c7ac14690c23
+	// 10:freezer:/kubepods/besteffort/pod0404f9f9-7e8f-4cf0-848a-a7a23ef63393/466f13d55e758cf1e969744007435e2eb3d48f4d64f81fa7f2c2c7ac14690c23
+	// ...
+	// 1:name=systemd:/kubepods/besteffort/pod0404f9f9-7e8f-4cf0-848a-a7a23ef63393/466f13d55e758cf1e969744007435e2eb3d48f4d64f81fa7f2c2c7ac14690c23
+	// 0::/system.slice/containerd.service
+	// [root@k8s-node1 /]# cat /proc/25512/cgroup
+	// 11:perf_event:/kubepods/v3io-fuse-ef516052-8c8f-4ddc-b1ac-53a2b63c6d47-storage
+	// ...
+	// 2:devices:/kubepods/v3io-fuse-ef516052-8c8f-4ddc-b1ac-53a2b63c6d47-storage
+	// 1:name=systemd:/kubepods/v3io-fuse-ef516052-8c8f-4ddc-b1ac-53a2b63c6d47-storage
+	args = append(args, " 2>&1 | multilog s16777215 n20 /var/log/containers/flex-fuse-`awk 'match($0, /\\/([^/]+)$/) {if (RLENGTH>32) {printf \"%s.%08x\",substr($0, RSTART+1, RLENGTH-1), int(rand()*1e8) ;exit}} BEGIN {srand()} END {if (RLENGTH <= 32) { printf \"random.%08x\", int(rand()*1e8);}}' /proc/self/cgroup`")
 
 	journal.Debug("Creating container",
 		"image", image,
