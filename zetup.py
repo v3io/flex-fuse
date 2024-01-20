@@ -225,7 +225,7 @@ def task_push_images(project, images, output_filepath=None):
                              output_filepath=output_filepath)
 
     project.logger.debug('Saving docker images', images=images)
-    yield ziggy.docker.push_images(project.ctx, images, output_filepath, compress=True)
+    yield ziggy.docker.push_images(project.ctx, images, output_filepath)
     project.logger.debug('Done saving docker images', output_filepath=output_filepath)
 
 @defer.inlineCallbacks
