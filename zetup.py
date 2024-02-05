@@ -190,7 +190,7 @@ def task_project_build(project, output_dir='flex_fuse_resources', tag='igz',
             },
         },
         {
-            'name': 'save_images',
+            'name': 'push_images',
             'args': {
                 'output_filepath': save_images_dir,
                 'images': ['iguazio/flex-fuse:{}'.format(tag)],
@@ -216,6 +216,17 @@ def task_save_images(project, images, output_filepath=None):
     yield ziggy.docker.save_images_separately(project.ctx, images, output_filepath, compress=True)
     project.logger.debug('Done saving docker images', output_filepath=output_filepath)
 
+
+@defer.inlineCallbacks
+def task_push_images(project, images, output_filepath=None):
+    if not output_filepath:
+        output_filepath = os.path.join(tempfile.gettempdir(), 'flex-fuse-docker-{0}.tar.gz'.format(uuid.uuid4()))
+        project.logger.debug('no output filepath was given, using a temporary file',
+                             output_filepath=output_filepath)
+
+    project.logger.debug('Saving docker images', images=images)
+    yield ziggy.docker.push_images(project.ctx, images, output_filepath)
+    project.logger.debug('Done saving docker images', output_filepath=output_filepath)
 
 @defer.inlineCallbacks
 def task_upload(project, upload_manifest_filepath, output_dir):
