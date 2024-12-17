@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -176,6 +177,73 @@ func (c *Containerd) RemoveContainer(containerName string) error {
 	return container.Delete(c.containerdContext)
 }
 
+func extractECRRegion(imageName string) (string, error) {
+	// Break down the regex parts:
+	// \.(?:dkr\.)? - optional dkr prefix
+	// ecr[^.]* - ecr followed by any non-dot characters (handles -public, -fips, etc.)
+	// \. - dot separator
+	// ([a-z0-9-]+) - capture group for region (allows letters, numbers, hyphens)
+	// \. - dot separator
+	// amazonaws\. - amazonaws prefix
+	// [^\s/]+ - any non-whitespace/non-slash chars for domain suffix (.com, .com.cn, etc.)
+	// Examples:
+	//         "123456789012.dkr.ecr.us-east-1.amazonaws.com/myapp:latest",
+	//         "123456789012.ecr.us-west-2.amazonaws.com/ml-model:v1.2.3",
+	//         // Public ECR
+	//         "public.ecr.aws/amazonlinux/amazonlinux:latest",
+	//         "public.ecr.us-west-2.amazonaws.com/myapp:latest",
+	//         // Gallery ECR
+	//         "gallery.ecr.aws/amazonlinux/amazonlinux:latest",
+	//         // Various ECR endpoints
+	//         "123456789012.dkr.ecr-fips.us-east-1.amazonaws.com/myapp:latest",
+	//         "123456789012.ecr-public.us-east-1.amazonaws.com/myapp:latest",
+	//         "123456789012.dkr.ecr.cn-north-1.amazonaws.com.cn/myapp:latest",
+	//         "123456789012.dkr.ecr.us-gov-west-1.amazonaws-us-gov.com/myapp:latest",
+	//         // Future hypothetical endpoints
+	//         "123456789012.dkr.ecr-newfeature.us-east-1.amazonaws.future/myapp:latest",
+	//         "123456789012.dkr.ecr-special-endpoint.us-west-2.amazonaws.special/myapp:latest",
+
+	re := regexp.MustCompile(`\.(?:dkr\.)?ecr[^.]*\.([a-z0-9-]+)\.amazonaws\.[^\s/]+`)
+
+	match := re.FindStringSubmatch(imageName)
+
+	if len(match) < 2 {
+		return "", fmt.Errorf("could not extract region from ECR image name: %s", imageName)
+	}
+
+	region := match[1]
+
+	// Handle special case where region might be 'aws'
+	if region == "aws" {
+		return "", fmt.Errorf("'aws' is not a region, this is likely a public ECR URL: %s", imageName)
+	}
+
+	return region, nil
+}
+
+// getECRPullCommand generates a pull command only if awsPath is found
+// Assumes the image is already verified to be an ECR image and region is extracted
+func getECRPullCommand(image, ctrPath, region string) (*exec.Cmd, error) {
+	// Find aws CLI path
+	awsPath, lookPathErr := exec.LookPath("aws")
+	if lookPathErr != nil {
+		return nil, fmt.Errorf("aws CLI not found in PATH: %w", lookPathErr)
+	}
+
+	// Get ECR password
+	cmd := exec.Command(awsPath, "ecr", "get-login-password", "--region", region)
+	ecrPasswordBytes, cmdErr := cmd.Output()
+	if cmdErr != nil {
+		return nil, fmt.Errorf("failed to retrieve ECR password: %w", cmdErr)
+	}
+
+	// Create pull command with ECR credentials
+	ecrPassword := strings.TrimSpace(string(ecrPasswordBytes))
+	pullCmd := exec.Command(ctrPath, "-n", "k8s.io", "images", "pull", "--user", fmt.Sprintf("AWS:%s", ecrPassword), image)
+
+	return pullCmd, nil
+}
+
 func (c *Containerd) createContainer(image string,
 	containerName string,
 	targetPath string,
@@ -252,24 +320,25 @@ func (c *Containerd) createContainer(image string,
 			return nil, err
 		}
 
-		// Check if AWS CLI is installed
 		var cmd *exec.Cmd
-		var awsPath string
 
-		if awsPath, err = exec.LookPath("aws"); err == nil {
-			// Get ECR password
-			cmd = exec.Command(awsPath, "ecr", "get-login-password", "--region", "us-east-2")
-			ecrPasswordBytes, err := cmd.Output()
+		err = fmt.Errorf("not ECR image")
+		if strings.Contains(image, "amazonaws") {
+			var ecrRegion string
+			// First check if it's an ECR image
+			ecrRegion, err = extractECRRegion(image)
 			if err != nil {
-				// Return an error if neither file exists
-				journal.Error("Failed to pull image: Error retrieving ECR password",
-					"containerName", containerName,
-					"image", image)
-				return nil, err
+				journal.Error("extractECRRegion return error, %v", err)
+			} else {
+				// If it is an ECR image, get the authenticated pull command
+				cmd, err = getECRPullCommand(image, ctrPath, ecrRegion)
+				if err != nil {
+					journal.Error("ECR region is %s, getECRPullCommand return error, %v", ecrRegion, err)
+				}
 			}
-			ecrPassword := strings.TrimSpace(string(ecrPasswordBytes))
-			cmd = exec.Command(ctrPath, "-n", "k8s.io", "images", "pull", "--user", fmt.Sprintf("AWS:%s", ecrPassword), image)
-		} else {
+		}
+		// If it's not an ECR image, or if the ECR image pull command failed, fall back to the default ctr pull command
+		if err != nil {
 			cmd = exec.Command(ctrPath, "-n", "k8s.io", "images", "pull", "--hosts-dir", "/etc/containerd/certs.d/", image)
 		}
 
