@@ -94,16 +94,28 @@ func (c *Containerd) CreateContainer(image string,
 
 	v3ioFUSEContainer, err := c.createContainer(image, containerName, targetPath, args)
 	if err != nil {
+		journal.Error("Failed to create",
+			"containerName", containerName,
+			"targetPath", targetPath,
+			"err", err)
 		return err
 	}
 
 	// create the actual process
 	v3ioFUSETask, err := v3ioFUSEContainer.NewTask(c.containerdContext, cio.LogFile(logFilePath))
 	if err != nil {
+		journal.Error("Failed to create task",
+			"containerName", containerName,
+			"targetPath", targetPath,
+			"err", err)
 		return err
 	}
 
 	if err := v3ioFUSETask.Start(c.containerdContext); err != nil {
+		journal.Error("Failed to start task",
+			"containerName", containerName,
+			"targetPath", targetPath,
+			"err", err)
 		return err
 	}
 
@@ -141,7 +153,75 @@ func (c *Containerd) RemoveContainer(containerName string) error {
 		"status", status.Status)
 
 	if status.Status != containerd.Stopped && status.Status != containerd.Created {
-		journal.Debug("Killing task", "containerName", containerName)
+		// Add process state information for debugging
+		pid := task.Pid()
+		processState := "unknown"
+
+		// Check if process exists and get its state
+		if statBytes, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid)); err == nil {
+			statFields := strings.Fields(string(statBytes))
+			if len(statFields) >= 3 {
+				processState = statFields[2]
+			}
+		}
+
+		journal.Debug("Task process info before kill",
+			"containerName", containerName,
+			"pid", pid,
+			"processState", processState)
+
+		// Create a regex pattern to extract both UUID and name
+		// Format: v3io-fuse-<UUID>-<name>
+		re := regexp.MustCompile(`v3io-fuse-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-(.+)`)
+		matches := re.FindStringSubmatch(containerName)
+
+		// Special handling for FUSE containers
+		if len(matches) >= 3 {
+			podUID := matches[1]
+			name := matches[2]
+			journal.Debug("FUSE container detected, extracted pod UID",
+				"containerName", containerName,
+				"podUID", podUID)
+
+			// Try to locate the specific mount point using the pod UID
+			expectedMountPath := fmt.Sprintf("/var/lib/kubelet/pods/%s/volumes/v3io~fuse/%s", podUID, name)
+			journal.Debug("Looking for FUSE mount point",
+				"expectedPath", expectedMountPath)
+
+			// Check if this path is actually mounted
+			isMounted := false
+			if mountBytes, err := exec.Command("findmnt", "-t", "fuse.v3io_adapters_fuse", "-o", "TARGET", "-n").Output(); err == nil {
+				mountPoints := strings.Split(strings.TrimSpace(string(mountBytes)), "\n")
+				for _, mountPoint := range mountPoints {
+					if mountPoint == expectedMountPath {
+						isMounted = true
+						break
+					}
+				}
+			}
+			if isMounted {
+				journal.Debug("Found matching FUSE mount point",
+					"mountPoint", expectedMountPath)
+
+				// Try lazy unmount to detach even if busy
+				journal.Debug("Attempting force unmount of FUSE filesystem",
+					"mountPoint", expectedMountPath)
+				unmountCmd := exec.Command("fusermount", "-u", expectedMountPath)
+				if unmountErr := unmountCmd.Run(); unmountErr != nil {
+					journal.Debug("Unmount attempt failed",
+						"mountPoint", expectedMountPath,
+						"error", unmountErr)
+				} else {
+					journal.Debug("Successfully force unmounted FUSE filesystem",
+						"mountPoint", expectedMountPath)
+				}
+			} else {
+				journal.Debug("Expected mount point not found or not a FUSE mount",
+					"expectedPath", expectedMountPath)
+			}
+		}
+		// Step 1: Try SIGTERM first
+		journal.Debug("Killing task with SIGTERM", "containerName", containerName)
 
 		err = task.Kill(c.containerdContext,
 			syscall.SIGTERM,
@@ -151,23 +231,82 @@ func (c *Containerd) RemoveContainer(containerName string) error {
 			return fmt.Errorf("Failed killing %s's task: %s", containerName, err)
 		}
 
-		journal.Debug("Waiting for task to die", "containerName", containerName)
-
-		// wait for task to exit
+		// Wait for task to exit with SIGTERM
+		journal.Debug("Waiting for task to die after SIGTERM", "containerName", containerName)
 		taskExitStatusChan, err := task.Wait(c.containerdContext)
 		if err != nil {
 			return fmt.Errorf("Failed waiting for %s's task: %s", containerName, err)
 		}
 
+		// Use a multi-step termination approach with increasing force
 		select {
 		case exitStatus := <-taskExitStatusChan:
-			journal.Debug("Done waiting for task to exist",
+			journal.Debug("Task exited after SIGTERM",
 				"containerName", containerName, "exitStatus", exitStatus)
 		case <-time.After(20 * time.Second):
-			return fmt.Errorf("Timed out waiting for %s's task to exit", containerName)
+			// Step 2: If SIGTERM didn't work, try SIGINT
+			journal.Debug("Task did not exit with SIGTERM, trying SIGINT", "containerName", containerName)
+			err = task.Kill(c.containerdContext, syscall.SIGINT, containerd.WithKillAll)
+			if err != nil {
+				journal.Debug("Failed to send SIGINT", "containerName", containerName, "error", err)
+			}
+
+			select {
+			case exitStatus := <-taskExitStatusChan:
+				journal.Debug("Task exited after SIGINT",
+					"containerName", containerName, "exitStatus", exitStatus)
+			case <-time.After(5 * time.Second):
+				// Step 3: If SIGINT didn't work, try SIGKILL as last resort
+				journal.Debug("Task did not exit with SIGINT, trying SIGKILL", "containerName", containerName)
+				err = task.Kill(c.containerdContext, syscall.SIGKILL, containerd.WithKillAll)
+				if err != nil {
+					journal.Debug("Failed to send SIGKILL", "containerName", containerName, "error", err)
+				}
+
+				select {
+				case exitStatus := <-taskExitStatusChan:
+					journal.Debug("Task exited after SIGKILL",
+						"containerName", containerName, "exitStatus", exitStatus)
+				case <-time.After(15 * time.Second):
+					// If we're dealing with a FUSE container, try one last desperate measure
+					if strings.HasPrefix(containerName, "v3io-fuse-") && strings.HasSuffix(containerName, "-v3io-fuse") {
+						journal.Debug("FUSE container task still not exiting, attempting to force kill process",
+							"containerName", containerName)
+
+						// Directly kill the FUSE process with SIGKILL
+						killCmd := exec.Command("kill", "-9", fmt.Sprintf("%d", pid))
+						if killErr := killCmd.Run(); killErr != nil {
+							journal.Debug("Failed to force kill process",
+								"pid", pid,
+								"error", killErr)
+						}
+
+						// Give it one last chance to exit
+						select {
+						case exitStatus := <-taskExitStatusChan:
+							journal.Debug("Task exited after direct kill",
+								"containerName", containerName, "exitStatus", exitStatus)
+						case <-time.After(5 * time.Second):
+							journal.Debug("Task still not exiting, attempting to delete task anyway")
+						}
+
+						// Try to delete the task even if it's still running
+						if _, err := task.Delete(c.containerdContext, containerd.WithProcessKill); err != nil {
+							journal.Error("Forced task deletion failed",
+								"containerName", containerName, "error", err)
+							// Continue to container deletion regardless
+							return container.Delete(c.containerdContext)
+						}
+					} else {
+						return fmt.Errorf("Timed out waiting for %s's task to exit even after SIGKILL", containerName)
+					}
+				}
+			}
 		}
 	}
 
+	// Normal deletion path
+	journal.Debug("Deleting task", "containerName", containerName)
 	if _, err := task.Delete(c.containerdContext); err != nil {
 		return fmt.Errorf("Failed to delete %s's task: %s", containerName, err)
 	}
@@ -393,6 +532,7 @@ func (c *Containerd) createContainer(image string,
 		oci.WithDevices("/dev/fuse", "", "rwm"),
 		withCgroupParent(getCgroupParent()),
 		withRootfsPropagation,
+		withSignalPropagation,
 	}
 
 	var spec specs.Spec
@@ -509,6 +649,59 @@ func withRootfsPropagation(_ context.Context, _ oci.Client, _ *containers.Contai
 	return nil
 }
 
+// Add this new function to configure process settings for proper signal handling
+func withSignalPropagation(_ context.Context, _ oci.Client, _ *containers.Container, s *oci.Spec) error {
+	// Ensure init process handles signals properly and propagates them
+	if s.Process == nil {
+		s.Process = &specs.Process{}
+	}
+
+	// Set terminal to false to ensure proper signal propagation
+	s.Process.Terminal = false
+
+	// Ensure we have the capabilities for signal handling
+	if s.Linux != nil && s.Process != nil {
+		if s.Process.Capabilities == nil {
+			s.Process.Capabilities = &specs.LinuxCapabilities{}
+		}
+
+		// Make sure CAP_KILL is included in capabilities
+		capKill := "CAP_KILL"
+
+		// Check and add to Bounding if needed
+		if s.Process.Capabilities.Bounding == nil {
+			s.Process.Capabilities.Bounding = []string{capKill}
+		} else if !containsCapability(s.Process.Capabilities.Bounding, capKill) {
+			s.Process.Capabilities.Bounding = append(s.Process.Capabilities.Bounding, capKill)
+		}
+
+		// Check and add to Effective if needed
+		if s.Process.Capabilities.Effective == nil {
+			s.Process.Capabilities.Effective = []string{capKill}
+		} else if !containsCapability(s.Process.Capabilities.Effective, capKill) {
+			s.Process.Capabilities.Effective = append(s.Process.Capabilities.Effective, capKill)
+		}
+
+		// Check and add to Permitted if needed
+		if s.Process.Capabilities.Permitted == nil {
+			s.Process.Capabilities.Permitted = []string{capKill}
+		} else if !containsCapability(s.Process.Capabilities.Permitted, capKill) {
+			s.Process.Capabilities.Permitted = append(s.Process.Capabilities.Permitted, capKill)
+		}
+	}
+
+	return nil
+}
+
+// Helper function to check if a capability exists in a slice
+func containsCapability(capabilities []string, capability string) bool {
+	for _, cap := range capabilities {
+		if cap == capability {
+			return true
+		}
+	}
+	return false
+}
 func withCgroupParent(cgroupParentPath string) oci.SpecOpts {
 	return func(_ context.Context, _ oci.Client, c *containers.Container, s *oci.Spec) error {
 		s.Linux.CgroupsPath = path.Join(cgroupParentPath, c.ID)
