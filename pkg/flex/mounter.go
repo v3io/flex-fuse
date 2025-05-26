@@ -68,6 +68,10 @@ func (m *Mounter) Mount(targetPath string, specString string) *Response {
 	}
 
 	if isMountPoint(targetPath) {
+		// Even if already mounted, verify and fix directory permissions
+		if err := m.createDirs(spec, targetPath); err != nil {
+			return NewFailResponse("Failed to verify/create folders", err)
+		}
 		return NewSuccessResponse(fmt.Sprintf("Already mounted: %s", targetPath))
 	}
 
@@ -96,9 +100,30 @@ func (m *Mounter) createDirs(spec Spec, targetPath string) error {
 		}
 		dirToCreate := fmt.Sprintf("%s/%s", targetPath, dir.Name)
 
-		_, err := os.Stat(dirToCreate)
+		fileInfo, err := os.Stat(dirToCreate)
 		if err == nil {
-			journal.Debug(fmt.Sprintf("Folder already exists: %s", dirToCreate))
+			// Directory exists
+			if dir.Permissions != 0 {
+				// Permissions specified - check and update if needed
+				currentPerm := fileInfo.Mode().Perm()
+				requiredPerm := os.FileMode(dir.Permissions)
+				
+				if currentPerm != requiredPerm {
+					journal.Debug(fmt.Sprintf("Updating permissions for folder: %s (current: %o, required: %o)", 
+						dirToCreate, currentPerm, requiredPerm))
+					
+					if err := os.Chmod(dirToCreate, requiredPerm); err != nil {
+						return fmt.Errorf("Failed to update permissions for folder [%s] from %o to %o: %s", 
+							dirToCreate, currentPerm, requiredPerm, err.Error())
+					}
+					journal.Debug(fmt.Sprintf("Successfully updated permissions for folder: %s", dirToCreate))
+				} else {
+					journal.Debug(fmt.Sprintf("Folder already exists with correct permissions: %s", dirToCreate))
+				}
+			} else {
+				// No permissions specified - just ensure directory exists
+				journal.Debug(fmt.Sprintf("Folder already exists (permissions not specified): %s", dirToCreate))
+			}
 			continue
 		}
 
@@ -106,10 +131,19 @@ func (m *Mounter) createDirs(spec Spec, targetPath string) error {
 			return fmt.Errorf("Stat failed for folder [%s]: %s", dirToCreate, err)
 		}
 
-		if err := os.MkdirAll(dirToCreate, dir.Permissions); err != nil {
-			return fmt.Errorf("Failed to create folder (path: %s, filemode: %o): %s", dir.Name, dir.Permissions, err.Error())
+		// Directory doesn't exist - create it
+		var createPerm os.FileMode
+		if dir.Permissions != 0 {
+			createPerm = dir.Permissions
+		} else {
+			// Default permissions if not specified
+			createPerm = 0755
 		}
-		journal.Debug(fmt.Sprintf("Created folder: %s", dirToCreate))
+		
+		if err := os.MkdirAll(dirToCreate, createPerm); err != nil {
+			return fmt.Errorf("Failed to create folder (path: %s, filemode: %o): %s", dirToCreate, createPerm, err.Error())
+		}
+		journal.Debug(fmt.Sprintf("Created folder: %s with permissions %o", dirToCreate, createPerm))
 	}
 	return nil
 }
