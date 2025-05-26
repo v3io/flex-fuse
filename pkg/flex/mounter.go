@@ -141,7 +141,7 @@ func (m *Mounter) createDirs(spec Spec, targetPath string) error {
 		}
 		
 		if err := os.MkdirAll(dirToCreate, createPerm); err != nil {
-			return fmt.Errorf("Failed to create folder (path: %s, filemode: %o): %s", dir.Name, createPerm, err.Error())
+			return fmt.Errorf("Failed to create folder (path: %s, filemode: %o): %s", dirToCreate, createPerm, err.Error())
 		}
 		journal.Debug(fmt.Sprintf("Created folder: %s with permissions %o", dirToCreate, createPerm))
 	}
