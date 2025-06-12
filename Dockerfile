@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-FROM golang:1.21 as builder
+FROM golang:1.24 AS builder
 
 ENV PROJECT_PATH=/flex-fuse
 
@@ -30,7 +30,7 @@ COPY ./cmd ./cmd
 
 RUN  CGO_ENABLED=0 go build -o /fuse cmd/fuse/main.go
 
-FROM alpine:3.20
+FROM alpine
 
 COPY hack/scripts/deploy.sh /usr/local/bin
 COPY hack/scripts/install.sh /install.sh
