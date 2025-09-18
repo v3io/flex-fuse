@@ -378,7 +378,7 @@ func getECRPullCommand(image, ctrPath, region string) (*exec.Cmd, error) {
 
 	// Create pull command with ECR credentials
 	ecrPassword := strings.TrimSpace(string(ecrPasswordBytes))
-	pullCmd := exec.Command(ctrPath, "-n", "k8s.io", "images", "pull", "--user", fmt.Sprintf("AWS:%s", ecrPassword), image)
+	pullCmd := exec.Command(ctrPath, "-n", "v3io", "images", "pull", "--user", fmt.Sprintf("AWS:%s", ecrPassword), image)
 
 	return pullCmd, nil
 }
@@ -418,6 +418,31 @@ func (c *Containerd) createContainer(image string,
 	importedImages, err := c.tryImportFromK8sNamespace(image)
 	if err != nil {
 		journal.Debug("Failed to import image from k8s namespace. Error: " + err.Error())
+
+		// Force-pull the image to v3io namespace as a fallback
+		// This mimics the manual workaround that resolves the issue
+		if pullErr := c.forcePullImageToK8sNamespace(image); pullErr != nil {
+			journal.Debug("Force-pull to v3io namespace also failed: " + pullErr.Error())
+		} else {
+			journal.Debug("Successfully force-pulled image to v3io namespace",
+				"containerName", containerName,
+				"image", image)
+
+			// Try import again after force-pull
+			importedImages, err = c.tryImportFromK8sNamespace(image)
+			if err != nil {
+				journal.Debug("Import still failed after force-pull: " + err.Error())
+			} else {
+				journal.Debug("Successfully imported image after force-pull",
+					"containerName", containerName,
+					"lenImportedImages", strconv.Itoa(len(importedImages)))
+
+				// override image
+				if len(importedImages) > 0 {
+					image = importedImages[0].Name
+				}
+			}
+		}
 	} else {
 		journal.Debug("Successfully imported image from k8s namespace",
 			"containerName", containerName,
@@ -565,6 +590,68 @@ func (c *Containerd) getLogFilePath(containerName string, targetPath string) (st
 	defer logFile.Close()
 
 	return logFile.Name(), nil
+}
+
+// forcePullImageToK8sNamespace force-pulls an image to the v3io namespace
+// This mimics the manual workaround: ctr -n v3io i pull --hosts-dir /etc/containerd/certs.d/ <image>
+func (c *Containerd) forcePullImageToK8sNamespace(imageName string) error {
+	// Get path to ctr
+	var ctrPath string
+	var err error
+
+	if ctrPath, err = exec.LookPath("ctr"); err == nil {
+	} else if _, err = os.Stat("/usr/local/bin/ctr"); err == nil {
+		ctrPath = "/usr/local/bin/ctr"
+	} else if _, err = os.Stat("/usr/bin/ctr"); err == nil {
+		ctrPath = "/usr/bin/ctr"
+	}
+	if err != nil {
+		return fmt.Errorf("ctr not found: %w", err)
+	}
+
+	journal.Debug("Force-pulling image to v3io namespace using ctr command",
+		"image", imageName,
+		"ctrPath", ctrPath)
+
+	// Construct the pull command exactly like the manual workaround
+	var cmd *exec.Cmd
+
+	// Check if it's an ECR image first
+	if strings.Contains(imageName, "amazonaws") {
+		var ecrRegion string
+		ecrRegion, err = extractECRRegion(imageName)
+		if err != nil {
+			journal.Debug("Not an ECR image or failed to extract region, using standard pull",
+				"image", imageName,
+				"err", err.Error())
+			// Fall back to standard pull
+			cmd = exec.Command(ctrPath, "-n", "v3io", "images", "pull", "--hosts-dir", "/etc/containerd/certs.d/", imageName)
+		} else {
+			// ECR image - get authenticated pull command
+			cmd, err = getECRPullCommand(imageName, ctrPath, ecrRegion)
+			if err != nil {
+				journal.Debug("Failed to get ECR pull command, using standard pull",
+					"image", imageName,
+					"err", err.Error())
+				cmd = exec.Command(ctrPath, "-n", "v3io", "images", "pull", "--hosts-dir", "/etc/containerd/certs.d/", imageName)
+			}
+		}
+	} else {
+		// Standard pull command
+		cmd = exec.Command(ctrPath, "-n", "v3io", "images", "pull", "--hosts-dir", "/etc/containerd/certs.d/", imageName)
+	}
+
+	// Execute the pull command
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to force-pull image to v3io namespace: %w, output: %s", err, string(output))
+	}
+
+	journal.Debug("Successfully force-pulled image to v3io namespace",
+		"image", imageName,
+		"output", string(output))
+
+	return nil
 }
 
 func (c *Containerd) tryImportFromK8sNamespace(imageName string) ([]images.Image, error) {
