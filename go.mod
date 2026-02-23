@@ -2,7 +2,7 @@ module github.com/v3io/flex-fuse
 
 go 1.24
 
-toolchain go1.24.11
+toolchain go1.24.13
 
 require (
 	github.com/containerd/containerd v1.7.29
