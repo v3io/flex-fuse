@@ -25,7 +25,7 @@ DEB_PATH = iguazio_deb
 
 .PHONY: build
 build:
-	DOCKER_BUILDKIT=0 docker build --tag flex-fuse:unstable .
+	DOCKER_BUILDKIT=0 docker build --pull --no-cache --tag flex-fuse:unstable .
 
 .PHONY: download
 download:
